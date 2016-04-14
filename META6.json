@@ -1,0 +1,13 @@
+{   "perl"        : "6",
+    "name"        : "Crypt::GCrypt",
+    "version"     : "0.0.1",
+    "description" : "Perl6 Bindings to the Gnu Crypt (gcrypt) library",
+    "depends"     : [ ],
+    "source-url"  : "git://github.com/p6-pdf/perl6-Crypt-GCrypt.git",
+    "provides"    : {
+        "Crypt::GCrypt" : "lib/Crypt/GCrypt.pm",
+        "Crypt::GCrypt::Raw" : "lib/Crypt/GCrypt/Raw.pm"
+     }
+}
+
+ 
