@@ -33,5 +33,14 @@ class Crypt::GCrypt::Raw {
         is export(:subs, :DEFAULT)
         is native(&find-lib) { * }
 
+    our sub gcry_cipher_get_algo_keylen(size_t $algo)
+        returns size_t
+        is export(:subs, :DEFAULT)
+        is native(&find-lib) { * }
+
+    our sub gcry_cipher_get_algo_blklen(size_t $algo)
+        returns size_t
+        is export(:subs, :DEFAULT)
+        is native(&find-lib) { * }
 
 }
