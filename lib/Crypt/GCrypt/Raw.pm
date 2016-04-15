@@ -15,7 +15,9 @@ class Crypt::GCrypt::Raw {
     }
 
     #| see gcrypt.h
-
+    my constant gcry_cipher_hd_t is export(:types, :DEFAULT) = OpaquePointer;
+    my constant gcry_md_hd_t is export(:types, :DEFAULT) = OpaquePointer;
+    my constant gcry_error_t is export(:types, :DEFAULT) = OpaquePointer;
     our sub gcry_check_version(Pointer $null-pointer?)
         returns Str
         is export(:subs, :DEFAULT)

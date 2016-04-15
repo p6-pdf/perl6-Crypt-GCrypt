@@ -9,11 +9,15 @@ class X::Crypt::GCrypt::Error is Exception {
 use v6;
 
 class Crypt::GCrypt {
-    use Crypt::GCrypt::Raw :subs;
+    use Crypt::GCrypt::Raw :subs, :types;
+    use NativeCall;
     
-    has Str $.type;
-    has Str $.algorithm;
-    has Str $.mode;
+    has int $!type;
+    has int $!action;
+    has gcry_cipher_hd_t $!h;
+    has gcry_md_hd_t $!h-md;
+    has gcry_error_t $!error;
+    has int $!mode;
 
     our sub cipher_algo_available(Str $name --> Bool) {
 	? gcry_cipher_map_name($name)
