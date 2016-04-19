@@ -1,6 +1,6 @@
 use v6;
 use Test;
-use Crypt::GCrypt::Raw :subs;
+use Crypt::GCrypt::Raw;
 
 my $version = gcry_check_version;
 ok $version, 'got version';

@@ -13,4 +13,6 @@ ok defined $c && $c.isa(Crypt::GCrypt);
 is $c.keylen, 16;
 is $c.blklen, 16;
 
+$c.start('encrypting');
+
 done-testing;
