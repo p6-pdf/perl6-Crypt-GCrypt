@@ -4,9 +4,7 @@ class Crypt::GCrypt::Raw {
     use NativeCall;
     use NativeCall::Types;
 
-    sub find-lib is export(:find-lib) {
-	$*VM.platform-library-name('gcrypt'.IO).Str;
-    }
+    constant LIB = $*VM.platform-library-name('gcrypt'.IO).Str;
 
     my role Alloced[&destroy-sub] {
 	submethod DESTROY {
@@ -116,14 +114,14 @@ class Crypt::GCrypt::Raw {
     our sub gcry_check_version(Pointer $null-pointer?)
         returns Str
         is export
-        is native(&find-lib) { * }
+        is native(LIB) { * }
 
     #/* Perform various operations defined by CMD. */
     #gcry_error_t gcry_control (enum gcry_ctl_cmds CMD, ...);
     sub gcry_control(gcry_ctl_cmd $CMD # gcry_ctl_cmds
-                 ) is native(&find-lib) returns gpg_error_t is export { * }
+                 ) is native(LIB) returns gpg_error_t is export { * }
     sub gcry_control2(gcry_ctl_cmd $CMD, gcry_int $, gcry_int $ # gcry_ctl_cmds
-                 ) is native(&find-lib) is symbol('gcry_control') returns gpg_error_t is export { * }
+                 ) is native(LIB) is symbol('gcry_control') returns gpg_error_t is export { * }
 
     #/* Map the algorithm name NAME to an cipher algorithm ID.  Return 0 if
     #   the algorithm name is not known. */
@@ -131,7 +129,26 @@ class Crypt::GCrypt::Raw {
     our sub gcry_cipher_map_name(Str $name)
         returns size_t
         is export
-        is native(&find-lib) { * }
+        is native(LIB) { * }
+
+    #/* Retrieve the length in bytes of the digest yielded by algorithm
+    #   ALGO. */
+    #unsigned int gcry_md_get_algo_dlen (int algo);
+    sub gcry_md_get_algo_dlen(gcry_int $algo # int
+        ) is native(LIB) returns uint32 is export { * }
+
+    #/* Convenience function to calculate the hash from the data in BUFFER
+    #   of size LENGTH using the algorithm ALGO avoiding the creating of a
+    #   hash object.  The hash is returned in the caller provided buffer
+    #   DIGEST which must be large enough to hold the digest of the given
+    #   algorithm. */
+    #void gcry_md_hash_buffer (int algo, void *digest,
+    #                          const void *buffer, size_t length);
+    sub gcry_md_hash_buffer(gcry_int     $algo # int
+			    ,CArray      $digest # void*
+			    ,CArray      $buffer # const void*
+			    ,size_t      $length # Typedef<size_t>->|long unsigned int|
+	) is native(LIB) returns CArray[uint8] is export { * }
 
     #/* Map the algorithm NAME to a digest algorithm Id.  Return 0 if
     #   the algorithm name is not known. */
@@ -139,21 +156,21 @@ class Crypt::GCrypt::Raw {
     our sub gcry_md_map_name(Str $name)
         returns size_t
         is export
-        is native(&find-lib) { * }
+        is native(LIB) { * }
 
     #/* Retrieve the key length in bytes used with algorithm A. */
     #size_t gcry_cipher_get_algo_keylen (int algo);
     our sub gcry_cipher_get_algo_keylen(gcry_int $algo)
         returns size_t
         is export
-        is native(&find-lib) { * }
+        is native(LIB) { * }
 
     #/* Retrieve the block length in bytes used with algorithm A. */
     #size_t gcry_cipher_get_algo_blklen (int algo);
     our sub gcry_cipher_get_algo_blklen(gcry_int $algo)
         returns size_t
         is export
-        is native(&find-lib) { * }
+        is native(LIB) { * }
 
     #/* Create a handle for algorithm ALGO to be used in MODE.  FLAGS may
 #   be given as an bitwise OR of the gcry_cipher_flags values. */
@@ -163,5 +180,5 @@ class Crypt::GCrypt::Raw {
 			 ,gcry_int                     $algo # int
 			 ,gcry_int                     $mode # int
 			 ,gcry_uint                    $flags # unsigned int
-                     ) is native(&find-lib) returns gpg_error_t is export { * }
+                     ) is native(LIB) returns gpg_error_t is export { * }
 }
