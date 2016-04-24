@@ -14,11 +14,10 @@ class Crypt::GCrypt {
 
     our $Sec-Mem-Size = 2 ** 15;
 
-    has int $!type;
+    has Str $.type where 'cipher'; #|todo: asymm digest
     my subset Action of Str where 'encrypting' | 'decrypting';
     has Action $!action;
     has gcry_cipher_hd_t $!h;
-    has gcry_md_hd_t $!h-md;
     has gcry_error_t $!err;
     has gcry_int $!mode;
     has CArray $buffer;
@@ -26,21 +25,17 @@ class Crypt::GCrypt {
     has size_t $.keylen;
     has Bool $need-to-call-finish;
 
-    method !map-cipher-mode(Str $mode --> gcry_cipher_modes ) {
-	constant %modes = %(
-	    :ecb(GCRY_CIPHER_MODE_ECB),
-	    :cfb(GCRY_CIPHER_MODE_CFB),
-	    :cbc(GCRY_CIPHER_MODE_CBC),
-	    :ofb(GCRY_CIPHER_MODE_OFB),
-	    :stream(GCRY_CIPHER_MODE_STREAM),
-	);
+    our constant %CIPHER-MODE = %(
+	:ecb(GCRY_CIPHER_MODE_ECB),
+	:cfb(GCRY_CIPHER_MODE_CFB),
+	:cbc(GCRY_CIPHER_MODE_CBC),
+	:ofb(GCRY_CIPHER_MODE_OFB),
+	:stream(GCRY_CIPHER_MODE_STREAM),
+    );
+    subset ModeName of Str where %CIPHER-MODE{$_}:exists;
 
-	with %modes{$mode} {
-            return $_
-        }
-	else {
-	    die "unknown cipher mode $mode"
-	}
+    method !map-cipher-mode(ModeName $mode --> gcry_cipher_modes ) {
+	%CIPHER-MODE{$mode}
     }
 
     method !init-library {
@@ -84,21 +79,23 @@ class Crypt::GCrypt {
     our sub cipher_algo_available(Str $name --> Bool) {
 	? gcry_cipher_map_name($name.lc)
     }
+    subset CipherName of Str where { gcry_cipher_map_name($_) }
 
     our sub digest_algo_available(Str $name --> Bool) {
 	? gcry_md_map_name($name.lc)
     }
+    subset DigestName of Str where { gcry_md_map_name($_) }
 
     submethod BUILD(Str :$type!,
-		    Str :$algorithm!,
+		    CipherName :$algorithm!,
 		    |c) {
 	self.build-gcrypt( $type.lc, $algorithm.lc, |c);
     }
 
     multi submethod build-gcrypt(
-	'cipher',
-	Str $algorithm,
-	Str :$mode is copy,
+	$!type where 'cipher',
+	CipherName $cipher-name,
+	ModeName :$mode is copy,
 	Bool :$secure,
 	Bool :$enable-sync,
     ) {
@@ -108,14 +105,18 @@ class Crypt::GCrypt {
 
 	self!init-library();
 
-	my gcry_int $algo = gcry_cipher_map_name($algorithm.lc);
-	die "Unknown cipher algorithm $algorithm"
-	    unless $algo;
-	$!blklen = gcry_cipher_get_algo_blklen($algo);
-	$!keylen = gcry_cipher_get_algo_blklen($algo);
+	my gcry_int $cipher-algo = gcry_cipher_map_name($cipher-name);
+	die "Unknown cipher algorithm $cipher-name"
+	    unless $cipher-algo;
+	$!blklen = gcry_cipher_get_algo_blklen($cipher-algo);
+	$!keylen = gcry_cipher_get_algo_blklen($cipher-algo);
 	$mode //= $!blklen > 1 ?? 'cbc' !! 'stream';
 	$!mode = self!map-cipher-mode($mode);
-	$!err //= gcry_cipher_open($!h, $algo, $!mode, $flags);
+	my $h-ptr = CArray[gcry_cipher_handle].new;
+	$h-ptr[0] = gcry_cipher_handle;
+	$!err //= gcry_cipher_open($h-ptr, $cipher-algo, $!mode, $flags);
+	$!h = $h-ptr[0];
+	warn { :$!err, :$!h }.perl;
     }
 
     multi method start(Action $!action) {
@@ -123,12 +124,25 @@ class Crypt::GCrypt {
 	$!buffer[$!blklen - 1] = 0;
 	$!need-to-call-finish = True;    
     }
-    
-    method set-key($key) {
-	...
+
+    multi method setkey(Str $key, Str :$enc = 'latin-1') {
+	$.setkey( $key.encode($enc) );
     }
-    method set-iv($vect) {
-	...
+    multi method setkey($key where {$.type eq 'cipher'}) {
+	my $k = CArray[uint8].new: $key;
+	$k[$.keylen - 1] = 0
+	    unless $k.elems >= $.keylen-1;
+	$!err = gcry_cipher_setkey($!h, $k, $.keylen);
+    }
+
+    multi method setiv(Str $key, Str :$enc = 'latin-1') {
+	$.setiv( $key.encode($enc) );
+    }
+    multi method setiv(|c) {
+	my $iv = CArray[uint8].new(|c);
+	$iv[$.keylen - 1] = 0
+	    unless $iv.elems >= $.keylen-1;
+	$!err = gcry_cipher_setiv($!h, $iv, $.keylen);
     }
 
 }

@@ -14,5 +14,5 @@ is $c.keylen, 16;
 is $c.blklen, 16;
 
 $c.start('encrypting');
-
+lives-ok {$c.setkey(my $key = "the key, the key")}, '.setkey';
 done-testing;

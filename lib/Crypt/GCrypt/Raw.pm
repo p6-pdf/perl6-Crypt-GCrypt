@@ -102,7 +102,12 @@ class Crypt::GCrypt::Raw {
 	GCRYCTL_REACTIVATE_FIPS_FLAG => 72
     );
 
-    my constant gcry_cipher_handle is export = OpaquePointer;
+    #/* Close the cioher handle H and release all resource. */
+    #void gcry_cipher_close (gcry_cipher_hd_t h);
+    sub gcry_cipher_close(OpaquePointer $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+                      ) is native(LIB)  is export { * }
+
+    my constant gcry_cipher_handle is export = OpaquePointer but Alloced[&gcry_cipher_close]; 
     my constant gcry_cipher_hd_t is export = OpaquePointer;
     my constant gcry_md_hd_t is export = OpaquePointer;
     my constant gcry_error_t is export = OpaquePointer;
@@ -172,13 +177,30 @@ class Crypt::GCrypt::Raw {
         is export
         is native(LIB) { * }
 
-    #/* Create a handle for algorithm ALGO to be used in MODE.  FLAGS may
+#/* Create a handle for algorithm ALGO to be used in MODE.  FLAGS may
 #   be given as an bitwise OR of the gcry_cipher_flags values. */
 #gcry_error_t gcry_cipher_open (gcry_cipher_hd_t *handle,
 #                              int algo, int mode, unsigned int flags);
-    sub gcry_cipher_open(gcry_cipher_handle $handle is rw # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|*
+    sub gcry_cipher_open(CArray[gcry_cipher_handle] $handle-ptr # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|*
 			 ,gcry_int                     $algo # int
 			 ,gcry_int                     $mode # int
 			 ,gcry_uint                    $flags # unsigned int
                      ) is native(LIB) returns gpg_error_t is export { * }
+
+    #/* Set KEY of length KEYLEN bytes for the cipher handle HD.  */
+    #gcry_error_t gcry_cipher_setkey (gcry_cipher_hd_t hd,
+    #                                 const void *key, size_t keylen);
+    sub gcry_cipher_setkey(gcry_cipher_handle            $hd # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+			   ,CArray[uint8]                       $key # const void*
+			   ,size_t                        $keylen # Typedef<size_t>->|long unsigned int|
+			  ) is native(LIB) returns gpg_error_t is export { * }
+
+    #/* Set initialization vector IV of length IVLEN for the cipher handle HD. */
+    #gcry_error_t gcry_cipher_setiv (gcry_cipher_hd_t hd,
+    #                                const void *iv, size_t ivlen);
+    sub gcry_cipher_setiv(gcry_cipher_handle            $hd # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+			  ,CArray[uint8]                       $iv # const void*
+			  ,size_t                        $ivlen # Typedef<size_t>->|long unsigned int|
+			 ) is native(LIB) returns gpg_error_t is export { * }
+
 }
