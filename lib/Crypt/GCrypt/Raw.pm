@@ -219,5 +219,6 @@ class Crypt::GCrypt::Raw {
 
     # hmm, works for me, not sure if it's a good idea
     sub memcpy(Pointer, Pointer, size_t) is native(LIB) returns Pointer is export(:memcpy) { * }
+    sub memset(Pointer, int32, size_t) is native(LIB) returns Pointer is export(:memset) { * }
 
 }

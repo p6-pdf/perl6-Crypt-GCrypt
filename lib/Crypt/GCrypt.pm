@@ -9,7 +9,7 @@ class X::Crypt::GCrypt::Error is Exception {
 use v6;
 
 class Crypt::GCrypt {
-    use Crypt::GCrypt::Raw :ALL,:memcpy;
+    use Crypt::GCrypt::Raw :ALL, :memcpy, :memset;
     use NativeCall;
 
     multi sub infix:<+>(Pointer $p, UInt $n) {
@@ -20,6 +20,12 @@ class Crypt::GCrypt {
 	    if type ~~ void;
 	my $pn = $p.new: +$p + $n;
 	nativecast(Pointer[$p.of], $pn);
+    }
+
+    sub newz(UInt $len) returns CArray {
+        my $buf = CArray[uint8].new;
+        $buf[$len-1] = 0;
+        $buf;
     }
 
     our $Sec-Mem-Size = 2 ** 15;
@@ -135,19 +141,19 @@ class Crypt::GCrypt {
     multi method start('encrypting') { $.start(Encrypting) }
     multi method start('decrypting') { $.start(Decrypting) }
     multi method start(Action $!action) {
-	$!buffer = CArray[uint8].new;
-	$!buffer[$!blklen - 1] = 0;
+	$!buffer = newz($!blklen);
 	$!need-to-call-finish = True;    
     }
 
     multi method setkey(Str $key, Str :$enc = 'latin-1') {
 	$.setkey( $key.encode($enc) );
     }
-    multi method setkey($key where {$.type eq 'cipher'}) {
-	my $k = CArray[uint8].new: $key;
-	$k[$!keylen - 1] = 0
-	    unless $k.elems >= $!keylen-1;
-	$!err = gcry_cipher_setkey($!h, $k, $!keylen);
+    multi method setkey($mykey is copy where {$.type eq 'cipher'}) {
+        if +$mykey < $!keylen || !$mykey.isa(CArray) {
+	    $mykey = CArray[uint8].new: $mykey.list;
+	    $mykey[$!keylen] = 0
+	}
+	$!err = gcry_cipher_setkey($!h, $mykey, $!keylen);
     }
 
     multi method setiv(Str $key, Str :$enc = 'latin-1') {
@@ -155,7 +161,7 @@ class Crypt::GCrypt {
     }
     multi method setiv(|c) {
 	my $iv = CArray[uint8].new(|c);
-	$iv[$!keylen - 1] = 0
+	$iv[$!keylen] = 0
 	    unless $iv.elems >= $!keylen-1;
 	$!err = gcry_cipher_setiv($!h, $iv, $!keylen);
     }
@@ -173,27 +179,71 @@ class Crypt::GCrypt {
 	        unless ilen %% $!blklen;
 	}
 
-	my $curbuf = CArray[uint8].new;
-	$curbuf[$!buflen] = 0;
+	my $curbuf = newz(ilen + $!buflen);
 	memcpy($curbuf.Pointer, $!buffer.Pointer, $!buflen);
-	my int $len = ilen + $!buflen;
-	if $len  %%  $!blklen {
+	memcpy($curbuf.Pointer + $!buflen, $!buffer.Pointer, ilen);
+
+	if (my int $len = ilen + $!buflen)  %%  $!blklen {
 	    $len = ilen + $!buflen;
 	    $!buffer[0] = 0;
 	    $!buflen = 0;
 	}
 	else {
 	    $len = (ilen + $!buflen) - $len;
-	    my \tmpbuf = CArray[uint8].new: $curbuf;
+	    my \tmpbuf = newz($len);
+            memcpy(tmpbuf.Pointer, $curbuf.Pointer, $len);
 	    memcpy($!buffer.Pointer, $curbuf.Pointer + $len, (ilen+$!buflen) - $len);
+            $!buflen += ilen - $len;
 	    $curbuf = tmpbuf;
 	}
-	my \obuf = CArray[uint8].new;
-	if $len {
-	    obuf[$len-1] = 0;
-	    $.err = gcry_cipher_encrypt($.h, \obuf, $len, $curbuf, $len);
-	}
+	my \obuf = newz($len);
+	$.err = gcry_cipher_encrypt($.h, \obuf, $len, $curbuf, $len)
+            if $len;
+
 	obuf;
     }
 
+    method !finish-encrypting {
+        if $!buflen < $!blklen {
+            my int $rlen = $!blklen - $!buflen;
+            my \tmpbuf = newz($!buflen + $rlen);
+            given $!padding {
+                when StandardPadding {
+                    memset( tmpbuf.Pointer + $!buflen, $rlen, $rlen);
+                }
+                when NullPadding {
+                    memset( tmpbuf.Pointer + $!buflen, 0, $rlen);
+                }
+                when SpacePadding {
+                    constant Sp = ' '.ord;
+                    memset( tmpbuf.Pointer + $!buflen, Sp, $rlen);
+                }
+            }
+            $!buffer := tmpbuf;
+        }
+        elsif $!padding == NullPadding && $!blklen == 8 {
+            my \tmpbuf = newz($!buflen + 8);
+            memcpy(tmpbuf.Pointer, $!buffer.Pointer, $!buflen);
+            memset(tmpbuf.Pointer + $!buflen, 0, 8);
+        }
+        my \obuf = newz($!blklen);
+        $!err =  gcry_cipher_encrypt($!h, obuf, $!blklen, $!buffer, $!blklen);
+        $!buffer[0] = 0;
+        $!buflen = 0;
+        obuf;
+    }
+
+    method !finish-decrypting {
+        ...
+    }
+
+    method finish {
+	die "Can't call finish when doing non-cipher operations"
+            unless $!type eq 'cipher';
+        $!need-to-call-finish = False;
+        given $!action {
+            when Encrypting { self!finish-encrypting }
+            when Decrypting { self!finish-decrypting }
+        }
+    }
 }

@@ -14,13 +14,15 @@ is $c.keylen, 16;
 is $c.blklen, 16;
 
 $c.start('encrypting');
-lives-ok {$c.setkey(my $key = "the key, the key")}, '.setkey';
+$c.setkey(my $key = "the key, the key");
 
 my $p = 'plain text';
-my Buf $e0 .= new: [0xC7, 0x96, 0x84, 0x35, 0x58, 0xCE, 0xFA, 0x15, 0x7B, 0xF1, 0x08, 0xAB, 0x79, 0x82, 0x3A, 0x5A, ];
+my uint8 @e0 = [0xC7, 0x96, 0x84, 0x35, 0x58, 0xCE, 0xFA, 0x15, 0x7B, 0xF1, 0x08, 0xAB, 0x79, 0x82, 0x3A, 0x5A, ];
 
-my @e = $c.encrypt($p);
-##$e.append: $c.finish;
-warn @e.perl;
+my uint8 @e = $c.encrypt($p).list;
+@e.append: $c.finish.list;
+
+todo "basic encryption";
+is-deeply @e, @e0;
 
 done-testing;
