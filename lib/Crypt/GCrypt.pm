@@ -9,18 +9,31 @@ class X::Crypt::GCrypt::Error is Exception {
 use v6;
 
 class Crypt::GCrypt {
-    use Crypt::GCrypt::Raw;
+    use Crypt::GCrypt::Raw :ALL,:memcpy;
     use NativeCall;
+
+    multi sub infix:<+>(Pointer $p, UInt $n) {
+	die "Can't do arithmetic with a void pointer"
+	    unless $p.can('of');
+	my \type = $p.of;
+	die "Can't do arithmetic with a void pointer"
+	    if type ~~ void;
+	my $pn = $p.new: +$p + $n;
+	nativecast(Pointer[$p.of], $pn);
+    }
 
     our $Sec-Mem-Size = 2 ** 15;
 
     has Str $.type where 'cipher'; #|todo: asymm digest
-    my subset Action of Str where 'encrypting' | 'decrypting';
+    my enum Action  is export(:Action) < Encrypting Decrypting >;
+    my enum Padding  is export(:Padding) < NoPadding StandardPadding NullPadding SpacePadding >;
     has Action $!action;
+    has Padding $!padding = NoPadding;
     has gcry_cipher_hd_t $!h;
     has gcry_error_t $!err;
     has gcry_int $!mode;
-    has CArray $buffer;
+    has CArray $!buffer;
+    has size_t $!buflen;
     has size_t $.blklen;
     has size_t $.keylen;
     has Bool $need-to-call-finish;
@@ -32,9 +45,9 @@ class Crypt::GCrypt {
 	:ofb(GCRY_CIPHER_MODE_OFB),
 	:stream(GCRY_CIPHER_MODE_STREAM),
     );
-    subset ModeName of Str where %CIPHER-MODE{$_}:exists;
+    subset CipherMode of Str where %CIPHER-MODE{$_}:exists;
 
-    method !map-cipher-mode(ModeName $mode --> gcry_cipher_modes ) {
+    method !map-cipher-mode(CipherMode $mode --> gcry_cipher_modes ) {
 	%CIPHER-MODE{$mode}
     }
 
@@ -95,7 +108,8 @@ class Crypt::GCrypt {
     multi submethod build-gcrypt(
 	$!type where 'cipher',
 	CipherName $cipher-name,
-	ModeName :$mode is copy,
+	CipherMode :$mode is copy,
+	Padding :$!padding = NoPadding,
 	Bool :$secure,
 	Bool :$enable-sync,
     ) {
@@ -116,9 +130,10 @@ class Crypt::GCrypt {
 	$h-ptr[0] = gcry_cipher_handle;
 	$!err //= gcry_cipher_open($h-ptr, $cipher-algo, $!mode, $flags);
 	$!h = $h-ptr[0];
-	warn { :$!err, :$!h }.perl;
     }
 
+    multi method start('encrypting') { $.start(Encrypting) }
+    multi method start('decrypting') { $.start(Decrypting) }
     multi method start(Action $!action) {
 	$!buffer = CArray[uint8].new;
 	$!buffer[$!blklen - 1] = 0;
@@ -130,9 +145,9 @@ class Crypt::GCrypt {
     }
     multi method setkey($key where {$.type eq 'cipher'}) {
 	my $k = CArray[uint8].new: $key;
-	$k[$.keylen - 1] = 0
-	    unless $k.elems >= $.keylen-1;
-	$!err = gcry_cipher_setkey($!h, $k, $.keylen);
+	$k[$!keylen - 1] = 0
+	    unless $k.elems >= $!keylen-1;
+	$!err = gcry_cipher_setkey($!h, $k, $!keylen);
     }
 
     multi method setiv(Str $key, Str :$enc = 'latin-1') {
@@ -140,11 +155,45 @@ class Crypt::GCrypt {
     }
     multi method setiv(|c) {
 	my $iv = CArray[uint8].new(|c);
-	$iv[$.keylen - 1] = 0
-	    unless $iv.elems >= $.keylen-1;
-	$!err = gcry_cipher_setiv($!h, $iv, $.keylen);
+	$iv[$!keylen - 1] = 0
+	    unless $iv.elems >= $!keylen-1;
+	$!err = gcry_cipher_setiv($!h, $iv, $!keylen);
+    }
+
+    multi method encrypt(Str $in, Str :$enc = 'latin-1') {
+	$.encrypt( $in.encode($enc) );
+    }
+
+    multi method encrypt($ibuf, uint \ilen = $ibuf.elems) {
+	die "start('encrypting') was not called"
+	    unless $!action == Encrypting;
+
+	if $!padding == NoPadding {
+	    die "'NoPadding' padding requires that input to .encrypt() is supplied as a multiple of blklen"
+	        unless ilen %% $!blklen;
+	}
+
+	my $curbuf = CArray[uint8].new;
+	$curbuf[$!buflen] = 0;
+	memcpy($curbuf.Pointer, $!buffer.Pointer, $!buflen);
+	my int $len = ilen + $!buflen;
+	if $len  %%  $!blklen {
+	    $len = ilen + $!buflen;
+	    $!buffer[0] = 0;
+	    $!buflen = 0;
+	}
+	else {
+	    $len = (ilen + $!buflen) - $len;
+	    my \tmpbuf = CArray[uint8].new: $curbuf;
+	    memcpy($!buffer.Pointer, $curbuf.Pointer + $len, (ilen+$!buflen) - $len);
+	    $curbuf = tmpbuf;
+	}
+	my \obuf = CArray[uint8].new;
+	if $len {
+	    obuf[$len-1] = 0;
+	    $.err = gcry_cipher_encrypt($.h, \obuf, $len, $curbuf, $len);
+	}
+	obuf;
     }
 
 }
-
-

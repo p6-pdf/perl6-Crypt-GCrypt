@@ -4,7 +4,7 @@ class Crypt::GCrypt::Raw {
     use NativeCall;
     use NativeCall::Types;
 
-    constant LIB = $*VM.platform-library-name('gcrypt'.IO).Str;
+    constant LIB = ('gcrypt', v20);
 
     my role Alloced[&destroy-sub] {
 	submethod DESTROY {
@@ -202,5 +202,22 @@ class Crypt::GCrypt::Raw {
 			  ,CArray[uint8]                       $iv # const void*
 			  ,size_t                        $ivlen # Typedef<size_t>->|long unsigned int|
 			 ) is native(LIB) returns gpg_error_t is export { * }
+
+    #/* Encrypt the plaintext of size INLEN in IN using the cipher handle H
+    #   into the buffer OUT which has an allocated length of OUTSIZE.  For
+    #   most algorithms it is possible to pass NULL for in and 0 for INLEN
+    #   and do a in-place decryption of the data provided in OUT.  */
+    #gcry_error_t gcry_cipher_encrypt (gcry_cipher_hd_t h,
+    #                                  void *out, size_t outsize,
+    #                                  const void *in, size_t inlen);
+    sub gcry_cipher_encrypt(gcry_cipher_handle            $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+			    ,CArray                        $out # void*
+			    ,size_t                        $outsize # Typedef<size_t>->|long unsigned int|
+			    ,CArray                        $in # const void*
+			    ,size_t                        $inlen # Typedef<size_t>->|long unsigned int|
+                           ) is native(LIB) returns gpg_error_t is export { * }
+
+    # hmm, works for me, not sure if it's a good idea
+    sub memcpy(Pointer, Pointer, size_t) is native(LIB) returns Pointer is export(:memcpy) { * }
 
 }
