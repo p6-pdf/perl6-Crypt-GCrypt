@@ -169,31 +169,32 @@ class Crypt::GCrypt {
     multi method encrypt(Str $in, Str :$enc = 'latin-1') {
 	$.encrypt( $in.encode($enc) );
     }
-
-    multi method encrypt($ibuf, uint \ilen = $ibuf.elems) {
+    multi method encrypt(Blob $ibuf, |c) {
+        $.encrypt( CArray[uint8].new($ibuf), |c);
+    }
+    multi method encrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
 	die "start('encrypting') was not called"
 	    unless $!action == Encrypting;
 
 	if $!padding == NoPadding {
 	    die "'NoPadding' padding requires that input to .encrypt() is supplied as a multiple of blklen"
-	        unless ilen %% $!blklen;
+	        unless $ilen %% $!blklen;
 	}
 
-	my $curbuf = newz(ilen + $!buflen);
+	my $curbuf = newz($ilen + $!buflen);
 	memcpy($curbuf.Pointer, $!buffer.Pointer, $!buflen);
-	memcpy($curbuf.Pointer + $!buflen, $!buffer.Pointer, ilen);
+	memcpy($curbuf.Pointer + $!buflen, $ibuf.Pointer, $ilen);
 
-	if (my int $len = ilen + $!buflen)  %%  $!blklen {
-	    $len = ilen + $!buflen;
+	if (my int $len = $ilen + $!buflen)  %%  $!blklen {
 	    $!buffer[0] = 0;
 	    $!buflen = 0;
 	}
 	else {
-	    $len = (ilen + $!buflen) - $len;
+	    $len -= $ilen + $!buflen;
 	    my \tmpbuf = newz($len);
             memcpy(tmpbuf.Pointer, $curbuf.Pointer, $len);
-	    memcpy($!buffer.Pointer, $curbuf.Pointer + $len, (ilen+$!buflen) - $len);
-            $!buflen += ilen - $len;
+	    memcpy($!buffer.Pointer, $curbuf.Pointer + $len, ($ilen+$!buflen) - $len);
+            $!buflen += $ilen - $len;
 	    $curbuf = tmpbuf;
 	}
 	my \obuf = newz($len);
@@ -207,6 +208,7 @@ class Crypt::GCrypt {
         if $!buflen < $!blklen {
             my int $rlen = $!blklen - $!buflen;
             my \tmpbuf = newz($!buflen + $rlen);
+            memcpy(tmpbuf.Pointer, $!buffer.Pointer, $!buflen);
             given $!padding {
                 when StandardPadding {
                     memset( tmpbuf.Pointer + $!buflen, $rlen, $rlen);
