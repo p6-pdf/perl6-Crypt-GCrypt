@@ -9,6 +9,10 @@ my $c = Crypt::GCrypt.new(
     :padding(NullPadding),
 );
 
+ok Crypt::GCrypt::cipher_algo_available('aes');
+ok Crypt::GCrypt::cipher_algo_available('arcfour');
+ok Crypt::GCrypt::cipher_algo_available('twofish');
+
 ok defined $c && $c.isa(Crypt::GCrypt);
 is $c.keylen, 16;
 is $c.blklen, 16;
@@ -23,5 +27,10 @@ my uint8 @e = $c.encrypt($p).list;
 @e.append: $c.finish.list;
 
 is-deeply @e, @e0;
+
+$c.setiv;
+$c.start('decrypting');
+my @d = $c.decrypt(@e);
+@d.append: $c.finish.list;
 
 done-testing;

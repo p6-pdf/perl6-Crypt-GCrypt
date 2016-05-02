@@ -217,7 +217,18 @@ class Crypt::GCrypt::Raw {
 			    ,size_t                        $inlen # Typedef<size_t>->|long unsigned int|
                            ) is native(LIB) returns gpg_error_t is export { * }
 
-    # hmm, works for me, not sure if it's a good idea
+    
+    #/* The counterpart to gcry_cipher_encrypt.  */
+    #gcry_error_t gcry_cipher_decrypt (gcry_cipher_hd_t h,
+    #                                  void *out, size_t outsize,
+    #                                  const void *in, size_t inlen);
+    sub gcry_cipher_decrypt(gcry_cipher_handle            $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+                            ,Pointer                       $out # void*
+                            ,size_t                        $outsize # Typedef<size_t>->|long unsigned int|
+                            ,Pointer                       $in # const void*
+                            ,size_t                        $inlen # Typedef<size_t>->|long unsigned int|
+                           ) is native(LIB) returns gpg_error_t is export { * }
+
     sub memcpy(Pointer, Pointer, size_t) is native(LIB) returns Pointer is export(:memcpy) { * }
     sub memset(Pointer, int32, size_t) is native(LIB) returns Pointer is export(:memset) { * }
 

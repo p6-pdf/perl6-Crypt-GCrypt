@@ -6,13 +6,12 @@ class X::Crypt::GCrypt::Error is Exception {
     has UInt $.status;
     method message {"GCrypt error: {$.message}"}
 }
-use v6;
 
 class Crypt::GCrypt {
     use Crypt::GCrypt::Raw :ALL, :memcpy, :memset;
     use NativeCall;
 
-    multi sub infix:<+>(Pointer $p, UInt $n) {
+    multi sub infix:<+>(Pointer() $p, UInt $n) returns Pointer {
 	die "Can't do arithmetic with a void pointer"
 	    unless $p.can('of');
 	my \type = $p.of;
@@ -22,11 +21,19 @@ class Crypt::GCrypt {
 	nativecast(Pointer[$p.of], $pn);
     }
 
+    #++ ports of some Perl XS macros
+
     sub newz(UInt $len) returns CArray {
         my $buf = CArray[uint8].new;
         $buf[$len-1] = 0;
         $buf;
     }
+
+    sub move(Pointer() $from, Pointer() $to, $len, $type = uint8) {
+        memcpy($to, $from, $len * nativesizeof($type));
+    }
+
+    #--
 
     our $Sec-Mem-Size = 2 ** 15;
 
@@ -42,7 +49,8 @@ class Crypt::GCrypt {
     has size_t $!buflen;
     has size_t $.blklen;
     has size_t $.keylen;
-    has Bool $need-to-call-finish;
+    has Bool $!need-to-call-finish;
+    has Bool $!buffer-is-decrypted;
 
     our constant %CIPHER-MODE = %(
 	:ecb(GCRY_CIPHER_MODE_ECB),
@@ -52,6 +60,14 @@ class Crypt::GCrypt {
 	:stream(GCRY_CIPHER_MODE_STREAM),
     );
     subset CipherMode of Str where %CIPHER-MODE{$_}:exists;
+
+    method err is rw {
+        Proxy.new(
+            FETCH => sub ($) { $!err },
+            STORE => sub ($, $!err) {
+                warn "error!" if $!err;
+            })
+    }
 
     method !map-cipher-mode(CipherMode $mode --> gcry_cipher_modes ) {
 	%CIPHER-MODE{$mode}
@@ -134,7 +150,7 @@ class Crypt::GCrypt {
 	$!mode = self!map-cipher-mode($mode);
 	my $h-ptr = CArray[gcry_cipher_handle].new;
 	$h-ptr[0] = gcry_cipher_handle;
-	$!err //= gcry_cipher_open($h-ptr, $cipher-algo, $!mode, $flags);
+	self.err = gcry_cipher_open($h-ptr, $cipher-algo, $!mode, $flags);
 	$!h = $h-ptr[0];
     }
 
@@ -153,7 +169,7 @@ class Crypt::GCrypt {
 	    $mykey = CArray[uint8].new: $mykey.list;
 	    $mykey[$!keylen] = 0
 	}
-	$!err = gcry_cipher_setkey($!h, $mykey, $!keylen);
+	$.err = gcry_cipher_setkey($!h, $mykey, $!keylen);
     }
 
     multi method setiv(Str $key, Str :$enc = 'latin-1') {
@@ -163,15 +179,9 @@ class Crypt::GCrypt {
 	my $iv = CArray[uint8].new(|c);
 	$iv[$!keylen] = 0
 	    unless $iv.elems >= $!keylen-1;
-	$!err = gcry_cipher_setiv($!h, $iv, $!keylen);
+	$.err = gcry_cipher_setiv($!h, $iv, $!keylen);
     }
 
-    multi method encrypt(Str $in, Str :$enc = 'latin-1') {
-	$.encrypt( $in.encode($enc) );
-    }
-    multi method encrypt(Blob $ibuf, |c) {
-        $.encrypt( CArray[uint8].new($ibuf), |c);
-    }
     multi method encrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
 	die "start('encrypting') was not called"
 	    unless $!action == Encrypting;
@@ -182,8 +192,8 @@ class Crypt::GCrypt {
 	}
 
 	my $curbuf = newz($ilen + $!buflen);
-	memcpy($curbuf.Pointer, $!buffer.Pointer, $!buflen);
-	memcpy($curbuf.Pointer + $!buflen, $ibuf.Pointer, $ilen);
+	memcpy(Pointer($curbuf), Pointer($!buffer), $!buflen);
+	memcpy($curbuf + $!buflen, Pointer($ibuf), $ilen);
 
 	if (my int $len = $ilen + $!buflen)  %%  $!blklen {
 	    $!buffer[0] = 0;
@@ -191,11 +201,11 @@ class Crypt::GCrypt {
 	}
 	else {
 	    $len -= $ilen + $!buflen;
-	    my \tmpbuf = newz($len);
-            memcpy(tmpbuf.Pointer, $curbuf.Pointer, $len);
-	    memcpy($!buffer.Pointer, $curbuf.Pointer + $len, ($ilen+$!buflen) - $len);
+	    my $tmpbuf = newz($len);
+            memcpy(Pointer($tmpbuf), Pointer($curbuf), $len);
+	    memcpy(Pointer($!buffer), $curbuf + $len, ($ilen+$!buflen) - $len);
             $!buflen += $ilen - $len;
-	    $curbuf = tmpbuf;
+	    $curbuf = $tmpbuf;
 	}
 	my \obuf = newz($len);
 	$.err = gcry_cipher_encrypt($.h, \obuf, $len, $curbuf, $len)
@@ -203,40 +213,136 @@ class Crypt::GCrypt {
 
 	obuf;
     }
+    multi method encrypt($ibuf where List|Blob, |c) {
+        $.encrypt( CArray[uint8].new($ibuf), |c);
+    }
+    multi method encrypt(Str $in, Str :$enc = 'latin-1') {
+	$.encrypt( $in.encode($enc) );
+    }
+    multi method encrypt(@buf, |c) {
+        $.encrypt( CArray[uint8].new: @buf, |c);
+    }
 
     method !finish-encrypting {
         if $!buflen < $!blklen {
             my int $rlen = $!blklen - $!buflen;
-            my \tmpbuf = newz($!buflen + $rlen);
-            memcpy(tmpbuf.Pointer, $!buffer.Pointer, $!buflen);
+            my $tmpbuf = newz($!buflen + $rlen);
+            memcpy(Pointer($tmpbuf), Pointer($!buffer), $!buflen);
             given $!padding {
                 when StandardPadding {
-                    memset( tmpbuf.Pointer + $!buflen, $rlen, $rlen);
+                    memset( $tmpbuf + $!buflen, $rlen, $rlen);
                 }
                 when NullPadding {
-                    memset( tmpbuf.Pointer + $!buflen, 0, $rlen);
+                    memset( $tmpbuf + $!buflen, 0, $rlen);
                 }
                 when SpacePadding {
                     constant Sp = ' '.ord;
-                    memset( tmpbuf.Pointer + $!buflen, Sp, $rlen);
+                    memset( $tmpbuf + $!buflen, Sp, $rlen);
                 }
             }
-            $!buffer := tmpbuf;
+            $!buffer = $tmpbuf;
         }
         elsif $!padding == NullPadding && $!blklen == 8 {
-            my \tmpbuf = newz($!buflen + 8);
-            memcpy(tmpbuf.Pointer, $!buffer.Pointer, $!buflen);
-            memset(tmpbuf.Pointer + $!buflen, 0, 8);
+            my $tmpbuf = newz($!buflen + 8);
+            memcpy(Pointer($tmpbuf), Pointer($!buffer), $!buflen);
+            memset( $tmpbuf + $!buflen, 0, 8);
+            $!buffer = $tmpbuf;
         }
         my \obuf = newz($!blklen);
-        $!err =  gcry_cipher_encrypt($!h, obuf, $!blklen, $!buffer, $!blklen);
+        $.err =  gcry_cipher_encrypt($!h, obuf, $!blklen, $!buffer, $!blklen);
         $!buffer[0] = 0;
         $!buflen = 0;
         obuf;
     }
 
+    multi method decrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
+	die "start('decrypting') was not called"
+	unless $!action == Decrypting;
+        my $total-len = $!buflen + $ilen;
+        my $len = $total-len - $!blklen;
+        my $ciphertext = newz($total-len);
+        move($ibuf, $ciphertext, $!buflen);
+        move($ibuf, $ciphertext + $!buflen, $ilen);
+        my $offset = $!buffer-is-decrypted ?? $!buflen !! 0;
+        move($ciphertext + $len, $!buffer, $!blklen);
+        $!buflen = $!blklen;
+        my \obuf = newz($len);
+        if $offset > 0 {
+            copy($ciphertext, obuf, $offset);
+            $.err = gcry_cipher_decrypt($!h, obuf + $offset, $len - $offset, $ciphertext + $offset, $len - $offset);
+        }
+        $!buffer-is-decrypted = True;
+        if self!find-padding( $!buffer, $!buflen) == -1 {
+            obuf[$len + $!buflen - 1] = 0; #extend
+            move($!buffer, obuf + $len, $!buflen);
+        }
+        obuf;
+    }
+    multi method decrypt($ibuf where List|Blob, |c) {
+        $.decrypt( CArray[uint8].new($ibuf), |c);
+    }
+    multi method decrypt(Str $in, Str :$enc = 'latin-1') {
+	$.decrypt( $in.encode($enc) );
+    }
+    multi method decrypt(@buf, |c) {
+        $.decrypt( CArray[uint8].new: @buf, |c);
+    }
+
+    method !find-padding(CArray $buf, int $len = $buf.elems) {
+        given $!padding {
+            when StandardPadding {
+                my uint8 $last-char = $buf[$len-1];
+                for 1 ..^ $len {
+                    return -1 if $buf[$len - $_] != $last-char;
+                }
+                $len - $last-char;
+            }
+            when NullPadding {
+                self!find-padding-chr($buf, $len, 0);
+            }
+            when SpacePadding {
+                self!find-padding-chr($buf, $len, 32);
+            }
+            default {
+                -1;
+            }
+        }
+    }
+
+    method !find-padding-chr($buf, $len, $ichr) {
+        my $p = (1 ..^ $len).first: {
+            $buf[$_] == $ichr;
+        };
+        with $p {
+            ($_ ..^ $len).first: {
+                $buf[$_] == $ichr;
+            } ?? -1 !! $_;  
+        }
+        else {
+            -1
+        }
+    }
+
     method !finish-decrypting {
-        ...
+        my \obuf = newz( $!buflen );
+        if $!buflen > 0 {
+            if $!buffer-is-decrypted {
+                move( $!buffer, obuf, $!buflen );
+            }
+            else {
+                $.err = gcry_cipher_decrypt($!h, obuf, $!buflen, $!buffer, $!buflen );
+            }
+            my $len = self!find-padding(obuf, $!buflen);
+            if $len >= 0 && $len < $!buflen {
+                # remove padding
+                my \tmp = newz($len);
+                memcpy( tmp, obuf, $len);
+                obuf = tmp;
+            }
+            $!buffer[0] = 0;
+            $!buflen = 0;
+        }
+        obuf;
     }
 
     method finish {
