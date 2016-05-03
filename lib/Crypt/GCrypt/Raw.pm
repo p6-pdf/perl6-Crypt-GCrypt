@@ -211,9 +211,9 @@ class Crypt::GCrypt::Raw {
     #                                  void *out, size_t outsize,
     #                                  const void *in, size_t inlen);
     sub gcry_cipher_encrypt(gcry_cipher_handle            $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
-			    ,CArray                        $out # void*
+			    ,Pointer                        $out # void*
 			    ,size_t                        $outsize # Typedef<size_t>->|long unsigned int|
-			    ,CArray                        $in # const void*
+			    ,Pointer                        $in # const void*
 			    ,size_t                        $inlen # Typedef<size_t>->|long unsigned int|
                            ) is native(LIB) returns gpg_error_t is export { * }
 

@@ -53,7 +53,7 @@ class Crypt::GCrypt {
     my enum Action  is export(:Action) < Encrypting Decrypting >;
     my enum Padding  is export(:Padding) < NoPadding StandardPadding NullPadding SpacePadding >;
     has Action $!action;
-    has Padding $!padding = NoPadding;
+    has Padding $!padding = StandardPadding;
     has gcry_cipher_hd_t $!h;
     has gcry_error_t $!err;
     has gcry_int $!mode;
@@ -142,7 +142,7 @@ class Crypt::GCrypt {
     multi submethod build-gcrypt(
 	$!type where 'cipher',
 	CipherName $cipher-name,
-	CipherMode :$mode is copy,
+	Str :$mode,
 	Padding :$!padding = NoPadding,
 	Bool :$secure,
 	Bool :$enable-sync,
@@ -157,9 +157,9 @@ class Crypt::GCrypt {
 	die "Unknown cipher algorithm $cipher-name"
 	    unless $cipher-algo;
 	$!blklen = gcry_cipher_get_algo_blklen($cipher-algo);
-	$!keylen = gcry_cipher_get_algo_blklen($cipher-algo);
-	$mode //= $!blklen > 1 ?? 'cbc' !! 'stream';
-	$!mode = self!map-cipher-mode($mode);
+	$!keylen = gcry_cipher_get_algo_keylen($cipher-algo);
+	my CipherMode $mode-name = $mode // $!blklen > 1 ?? 'cbc' !! 'stream';
+	$!mode = self!map-cipher-mode($mode-name);
 	my $h-buf = CArray[gcry_cipher_handle].new;
 	$h-buf[0] = gcry_cipher_handle;
 	self.err = gcry_cipher_open($h-buf, $cipher-algo, $!mode, $flags);
@@ -190,9 +190,9 @@ class Crypt::GCrypt {
     }
     multi method setiv(|c) {
 	my $iv = CArray[uint8].new(|c);
-	$iv[$!keylen] = 0
-	    unless $iv.elems >= $!keylen;
-	$.err = gcry_cipher_setiv($!h, $iv+0, $!keylen);
+	$iv[$!blklen] = 0
+	    unless $iv.elems >= $!blklen;
+	$.err = gcry_cipher_setiv($!h, $iv+0, $!blklen);
     }
 
     multi method encrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
@@ -221,7 +221,7 @@ class Crypt::GCrypt {
 	    $curbuf = $tmpbuf;
 	}
 	my \obuf = newz($len);
-	$.err = gcry_cipher_encrypt($.h, \obuf, $len, $curbuf, $len)
+	$.err = gcry_cipher_encrypt($!h, obuf+0, $len, $curbuf+0, $len)
             if $len;
 
 	obuf;
@@ -263,7 +263,7 @@ class Crypt::GCrypt {
             $!buffer = $tmpbuf;
         }
         my \obuf = newz($!blklen);
-        $.err =  gcry_cipher_encrypt($!h, obuf, $!blklen, $!buffer, $!blklen);
+        $.err =  gcry_cipher_encrypt($!h, obuf+0, $!blklen, $!buffer+0, $!blklen);
         $!buffer[0] = 0;
         $!buflen = 0;
         obuf;

@@ -3,6 +3,15 @@ use Test;
 use Crypt::GCrypt :Padding;
 use NativeCall;
 
+ok Crypt::GCrypt::cipher_algo_available('aes');
+ok Crypt::GCrypt::cipher_algo_available('arcfour');
+ok Crypt::GCrypt::cipher_algo_available('twofish');
+
+my $p = 'plain text';
+my Buf $e0 .= new: [0xC7, 0x96, 0x84, 0x35, 0x58, 0xCE, 0xFA, 0x15, 0x7B, 0xF1, 0x08, 0xAB, 0x79, 0x82, 0x3A, 0x5A, ];
+
+# --- #
+
 my $c = Crypt::GCrypt.new(
     :type<cipher>,
     :algorithm<aes>,
@@ -10,19 +19,12 @@ my $c = Crypt::GCrypt.new(
     :padding(NullPadding),
 );
 
-ok Crypt::GCrypt::cipher_algo_available('aes');
-ok Crypt::GCrypt::cipher_algo_available('arcfour');
-ok Crypt::GCrypt::cipher_algo_available('twofish');
-
 ok defined $c && $c.isa(Crypt::GCrypt);
 is $c.keylen, 16;
 is $c.blklen, 16;
 
 $c.start('encrypting');
 $c.setkey(my $key = "the key, the key");
-
-my $p = 'plain text';
-my Buf $e0 .= new: [0xC7, 0x96, 0x84, 0x35, 0x58, 0xCE, 0xFA, 0x15, 0x7B, 0xF1, 0x08, 0xAB, 0x79, 0x82, 0x3A, 0x5A, ];
 
 my Buf $e .= new: $c.encrypt($p);
 $e.append: $c.finish;
@@ -35,5 +37,50 @@ my Buf $d .= new: $c.decrypt($e);
 $d.append: $c.finish.list;
 
 is $d.decode('latin-1'), $p;
+
+# --- #
+
+$c = Crypt::GCrypt.new(
+    :type<cipher>,
+    :algorithm<aes>,
+    :mode<ecb>,
+    :padding(NullPadding),
+);
+
+ok defined $c && $c.isa(Crypt::GCrypt);
+is $c.keylen, 16;
+is $c.blklen, 16;
+
+$c.start('encrypting');
+$c.setkey($key = "the key, the key");
+
+$e .= new: $c.encrypt($p);
+$e.append: $c.finish;
+
+is-deeply $e, $e0;
+
+# --- #
+
+$c = Crypt::GCrypt.new(
+    :type<cipher>,
+    :algorithm<twofish>,
+    :padding(NullPadding),
+);
+is $c.keylen, 32;
+is $c.blklen, 16;
+$c.start('encrypting');
+$c.setkey($key);
+$c.setiv(my $iv = 'explicit iv');
+$e = Buf.new: $c.encrypt($p);
+$e.append: $c.finish;
+is-deeply [$e.list], [0x9C, 0x93, 0x70, 0x5D, 0x7B, 0x33, 0x48, 0xC7, 0x3C, 0xD2, 0x04, 0x7C, 0xE5, 0xEC, 0xC1, 0xA8, ];
+
+$c.start('decrypting');
+$c.setiv($iv);
+$d = Buf.new: $c.decrypt($e);
+$d.append: $c.finish;
+is $d.decode('latin-1'), $p;
+
+# --- #
 
 done-testing;
