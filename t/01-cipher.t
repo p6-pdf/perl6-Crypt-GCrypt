@@ -83,4 +83,34 @@ is $d.decode('latin-1'), $p;
 
 # --- #
 
+$c = Crypt::GCrypt.new(
+                        :type<cipher>,
+                        :algorithm<arcfour>,
+                        :padding(NullPadding),
+);
+is $c.keylen, 16;
+is $c.blklen, 1;
+$c.start('encrypting');
+$c.setkey($key);
+$e = Buf.new: $c.encrypt($p);
+is-deeply [$e.list], [ 0x02, 0xa9, 0x8d, 0x20, 0xa1, 0x76, 0x72, 0x9e, 0xa7, 0xcd];
+
+$c.setkey($key);
+$c.start('decrypting');
+$d = Buf.new: $c.decrypt($e);
+$d.append: $c.finish;
+is $d.decode('latin-1'), $p;
+
+# --- #
+### 'none' padding
+
+$c = Crypt::GCrypt.new(
+    :type<cipher>,
+    :algorithm<aes>,
+    :padding(NoPadding),
+    );
+$c.start('encrypting');
+dies-ok { $c.encrypt('aaa') };
+lives-ok {$c.encrypt('aaaaaaaaaaaaaaaa') ; $c.finish; };
+
 done-testing;
