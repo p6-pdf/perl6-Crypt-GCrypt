@@ -102,14 +102,27 @@ class Crypt::GCrypt::Raw {
 	GCRYCTL_REACTIVATE_FIPS_FLAG => 72
     );
 
-    #/* Close the cioher handle H and release all resource. */
+    enum gcry_md_flags is export (
+        GCRY_MD_FLAG_SECURE => 1,
+        GCRY_MD_FLAG_HMAC => 2,
+        GCRY_MD_FLAG_BUGEMU1 => 256
+    );
+    
+    #/* Close the cipher handle H and release all resource. */
     #void gcry_cipher_close (gcry_cipher_hd_t h);
     sub gcry_cipher_close(OpaquePointer $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
-                      ) is native(LIB)  is export { * }
+                         ) is native(LIB)  is export { * }
 
-    my constant gcry_cipher_handle is export = OpaquePointer but Alloced[&gcry_cipher_close]; 
-    my constant gcry_cipher_hd_t is export = OpaquePointer;
-    my constant gcry_md_hd_t is export = OpaquePointer;
+    #/* Release the message digest object HD.  */
+#void gcry_md_close (gcry_md_hd_t hd);
+    sub gcry_md_close(OpaquePointer $hd # Typedef<gcry_md_hd_t>->|gcry_md_handle*|
+                  ) is native(LIB)  is export { * }
+
+#-From /usr/include/gcrypt.h:1191
+#/* Add the message digest algorithm ALGO to the digest object HD.  */
+
+    my constant gcry_cipher_hd_t is export = OpaquePointer but Alloced[&gcry_cipher_close]; 
+    my constant gcry_md_hd_t is export = OpaquePointer but Alloced[&gcry_md_close]; 
     my constant gcry_error_t is export = OpaquePointer;
     my constant gpg_error_t is export = OpaquePointer;
     my constant gcry_ctl_cmd is export = gcry_uint;
@@ -155,6 +168,24 @@ class Crypt::GCrypt::Raw {
 			    ,size_t      $length # Typedef<size_t>->|long unsigned int|
 	) is native(LIB) returns CArray[uint8] is export { * }
 
+    #/* Create a message digest object for algorithm ALGO.  FLAGS may be
+    #   given as an bitwise OR of the gcry_md_flags values.  ALGO may be
+    #   given as 0 if the algorithms to be used are later set using
+    #   gcry_md_enable.  */
+    #gcry_error_t gcry_md_open (gcry_md_hd_t *h, int algo, unsigned int flags);
+    sub gcry_md_open(Pointer[gcry_md_hd_t]  $h # Typedef<gcry_md_hd_t>->|gcry_md_handle*|*
+                     ,int32                 $algo # int
+                     ,uint32                $flags # unsigned int
+                    ) is native(LIB) returns gpg_error_t is export { * }
+
+    #/* For use with the HMAC feature, the set MAC key to the KEY of
+    #   KEYLEN bytes. */
+    #gcry_error_t gcry_md_setkey (gcry_md_hd_t hd, const void *key, size_t keylen);
+    sub gcry_md_setkey(gcry_md_hd_t  $hd # Typedef<gcry_md_hd_t>->|gcry_md_handle*|
+                       ,Pointer      $key # const void*
+                       ,size_t       $keylen # Typedef<size_t>->|long unsigned int|
+                      ) is native(LIB) returns gpg_error_t is export { * }
+    
     #/* Map the algorithm NAME to a digest algorithm Id.  Return 0 if
     #   the algorithm name is not known. */
     #int gcry_md_map_name (const char* name) _GCRY_GCC_ATTR_PURE;
@@ -190,7 +221,7 @@ class Crypt::GCrypt::Raw {
     #/* Set KEY of length KEYLEN bytes for the cipher handle HD.  */
     #gcry_error_t gcry_cipher_setkey (gcry_cipher_hd_t hd,
     #                                 const void *key, size_t keylen);
-    sub gcry_cipher_setkey(gcry_cipher_handle            $hd # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+    sub gcry_cipher_setkey(gcry_cipher_hd_t              $hd # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
 			   ,Pointer                      $key # const void*
 			   ,size_t                       $keylen # Typedef<size_t>->|long unsigned int|
 			  ) is native(LIB) returns gpg_error_t is export { * }
@@ -198,7 +229,7 @@ class Crypt::GCrypt::Raw {
     #/* Set initialization vector IV of length IVLEN for the cipher handle HD. */
     #gcry_error_t gcry_cipher_setiv (gcry_cipher_hd_t hd,
     #                                const void *iv, size_t ivlen);
-    sub gcry_cipher_setiv(gcry_cipher_handle            $hd # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+    sub gcry_cipher_setiv(gcry_cipher_hd_t              $hd # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
 			  ,Pointer                      $iv # const void*
 			  ,size_t                       $ivlen # Typedef<size_t>->|long unsigned int|
 			 ) is native(LIB) returns gpg_error_t is export { * }
@@ -210,11 +241,11 @@ class Crypt::GCrypt::Raw {
     #gcry_error_t gcry_cipher_encrypt (gcry_cipher_hd_t h,
     #                                  void *out, size_t outsize,
     #                                  const void *in, size_t inlen);
-    sub gcry_cipher_encrypt(gcry_cipher_handle            $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
-			    ,Pointer                        $out # void*
-			    ,size_t                        $outsize # Typedef<size_t>->|long unsigned int|
-			    ,Pointer                        $in # const void*
-			    ,size_t                        $inlen # Typedef<size_t>->|long unsigned int|
+    sub gcry_cipher_encrypt(gcry_cipher_hd_t  $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+			    ,Pointer          $out # void*
+			    ,size_t           $outsize # Typedef<size_t>->|long unsigned int|
+			    ,Pointer          $in # const void*
+			    ,size_t           $inlen # Typedef<size_t>->|long unsigned int|
                            ) is native(LIB) returns gpg_error_t is export { * }
 
     
@@ -222,11 +253,11 @@ class Crypt::GCrypt::Raw {
     #gcry_error_t gcry_cipher_decrypt (gcry_cipher_hd_t h,
     #                                  void *out, size_t outsize,
     #                                  const void *in, size_t inlen);
-    sub gcry_cipher_decrypt(gcry_cipher_handle            $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
-                            ,Pointer                       $out # void*
-                            ,size_t                        $outsize # Typedef<size_t>->|long unsigned int|
-                            ,Pointer                       $in # const void*
-                            ,size_t                        $inlen # Typedef<size_t>->|long unsigned int|
+    sub gcry_cipher_decrypt(gcry_cipher_hd_t  $h # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|
+                            ,Pointer          $out # void*
+                            ,size_t           $outsize # Typedef<size_t>->|long unsigned int|
+                            ,Pointer          $in # const void*
+                            ,size_t           $inlen # Typedef<size_t>->|long unsigned int|
                            ) is native(LIB) returns gpg_error_t is export { * }
 
     sub memcpy(Pointer, Pointer, size_t) is native(LIB) returns Pointer is export(:memcpy) { * }

@@ -10,6 +10,16 @@ class X::Crypt::GCrypt::Error is Exception {
 class Crypt::GCrypt {
     use Crypt::GCrypt::Raw;
 
+    has gcry_error_t $!err;
+
+    method err is rw {
+        Proxy.new(
+            FETCH => sub ($) { $!err },
+            STORE => sub ($, $!err) {
+                warn "error!" if $!err;
+            })
+    }
+
     our $Sec-Mem-Size = 2 ** 15;
 
     method !init-library {

@@ -42,12 +42,11 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     
     #--
 
-    my enum Action  is export(:Action) < Encrypting Decrypting >;
-    my enum Padding  is export(:Padding) < NoPadding StandardPadding NullPadding SpacePadding >;
+    my enum Action is export(:Action) < Encrypting Decrypting >;
+    my enum Padding is export(:Padding) < NoPadding StandardPadding NullPadding SpacePadding >;
     has Action $!action;
     has Padding $!padding = StandardPadding;
     has gcry_cipher_hd_t $!h;
-    has gcry_error_t $!err;
     has gcry_int $!mode;
     has CArray $!buffer;
     has size_t $!buflen;
@@ -65,14 +64,6 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     );
     subset CipherMode of Str where %CIPHER-MODE{$_}:exists;
 
-    method err is rw {
-        Proxy.new(
-            FETCH => sub ($) { $!err },
-            STORE => sub ($, $!err) {
-                warn "error!" if $!err;
-            })
-    }
-
     method !map-cipher-mode(CipherMode $mode --> gcry_cipher_modes ) {
 	%CIPHER-MODE{$mode}
     }
@@ -82,16 +73,11 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     }
     subset CipherName of Str where { gcry_cipher_map_name($_) }
 
-    our sub digest_algo_available(Str $name --> Bool) {
-	? gcry_md_map_name($name.lc)
-    }
-    subset DigestName of Str where { gcry_md_map_name($_) }
-
     submethod BUILD(CipherName :$algorithm!, |c) {
-	self.build-gcrypt( $algorithm, |c);
+	self.build-cipher( $algorithm, |c);
     }
 
-    multi submethod build-gcrypt(
+    multi submethod build-cipher(
 	CipherName $cipher-name,
 	Str :$mode,
 	Padding :$!padding = NoPadding,
@@ -109,8 +95,8 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	$!keylen = gcry_cipher_get_algo_keylen($cipher-algo);
 	my CipherMode $mode-name = $mode // $!blklen > 1 ?? 'cbc' !! 'stream';
 	$!mode = self!map-cipher-mode($mode-name);
-	my $h-buf = CArray[gcry_cipher_handle].new;
-	$h-buf[0] = gcry_cipher_handle;
+	my $h-buf = CArray[gcry_cipher_hd_t].new;
+	$h-buf[0] = gcry_cipher_hd_t;
 	self.err = gcry_cipher_open($h-buf, $cipher-algo, $!mode, $flags);
 	$!h = $h-buf[0];
     }
