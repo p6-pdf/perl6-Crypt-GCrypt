@@ -6,6 +6,8 @@
     "source-url"  : "git://github.com/p6-pdf/perl6-Crypt-GCrypt.git",
     "provides"    : {
         "Crypt::GCrypt" : "lib/Crypt/GCrypt.pm",
+        "Crypt::GCrypt::Cipher" : "lib/Crypt/GCrypt/Cipher.pm",
+        "Crypt::GCrypt::Digest" : "lib/Crypt/GCrypt/Digest.pm",
         "Crypt::GCrypt::Raw" : "lib/Crypt/GCrypt/Raw.pm"
      }
 }

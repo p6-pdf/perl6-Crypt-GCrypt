@@ -1,25 +1,24 @@
 use v6;
 use Test;
-use Crypt::GCrypt :Padding;
+use Crypt::GCrypt::Cipher :Padding;
 use NativeCall;
 
-ok Crypt::GCrypt::cipher_algo_available('aes');
-ok Crypt::GCrypt::cipher_algo_available('arcfour');
-ok Crypt::GCrypt::cipher_algo_available('twofish');
+ok Crypt::GCrypt::Cipher::cipher_algo_available('aes');
+ok Crypt::GCrypt::Cipher::cipher_algo_available('arcfour');
+ok Crypt::GCrypt::Cipher::cipher_algo_available('twofish');
 
 my $p = 'plain text';
 my Buf $e0 .= new: [0xC7, 0x96, 0x84, 0x35, 0x58, 0xCE, 0xFA, 0x15, 0x7B, 0xF1, 0x08, 0xAB, 0x79, 0x82, 0x3A, 0x5A, ];
 
 # --- #
 
-my $c = Crypt::GCrypt.new(
-    :type<cipher>,
+my $c = Crypt::GCrypt::Cipher.new(
     :algorithm<aes>,
     :mode<cbc>,
     :padding(NullPadding),
 );
 
-ok defined $c && $c.isa(Crypt::GCrypt);
+ok defined $c && $c.isa(Crypt::GCrypt::Cipher);
 is $c.keylen, 16;
 is $c.blklen, 16;
 
@@ -40,14 +39,13 @@ is $d.decode('latin-1'), $p;
 
 # --- #
 
-$c = Crypt::GCrypt.new(
-    :type<cipher>,
+$c = Crypt::GCrypt::Cipher.new(
     :algorithm<aes>,
     :mode<ecb>,
     :padding(NullPadding),
 );
 
-ok defined $c && $c.isa(Crypt::GCrypt);
+ok defined $c && $c.isa(Crypt::GCrypt::Cipher);
 is $c.keylen, 16;
 is $c.blklen, 16;
 
@@ -61,8 +59,7 @@ is-deeply $e, $e0;
 
 # --- #
 
-$c = Crypt::GCrypt.new(
-    :type<cipher>,
+$c = Crypt::GCrypt::Cipher.new(
     :algorithm<twofish>,
     :padding(NullPadding),
 );
@@ -83,10 +80,9 @@ is $d.decode('latin-1'), $p;
 
 # --- #
 
-$c = Crypt::GCrypt.new(
-                        :type<cipher>,
-                        :algorithm<arcfour>,
-                        :padding(NullPadding),
+$c = Crypt::GCrypt::Cipher.new(
+    :algorithm<arcfour>,
+    :padding(NullPadding),
 );
 is $c.keylen, 16;
 is $c.blklen, 1;
@@ -104,8 +100,7 @@ is $d.decode('latin-1'), $p;
 # --- #
 ### 'none' padding
 
-$c = Crypt::GCrypt.new(
-    :type<cipher>,
+$c = Crypt::GCrypt::Cipher.new(
     :algorithm<aes>,
     :padding(NoPadding),
     );
