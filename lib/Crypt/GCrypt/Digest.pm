@@ -44,20 +44,14 @@ class Crypt::GCrypt::Digest is Crypt::GCrypt {
 	$.setkey( $key.encode($enc) );
     }
     multi method setkey($mykey is copy) {
-        unless $mykey.isa(CArray) {
-	    $mykey = CArray[uint8].new: $mykey.list;
-	}
-	$.err = gcry_md_setkey($!h, $mykey+0, $mykey.elems);
+	$.err = gcry_md_setkey($!h, xs-ptr($mykey), $mykey.elems);
     }
 
     multi method write(Str $stuff, Str :$enc = 'latin-1') {
 	$.write( $stuff.encode($enc) );
     }
     multi method write( $stuff is copy ) {
-        unless $stuff.isa(CArray) {
-	    $stuff = CArray[uint8].new: $stuff.list;
-	}
-	gcry_md_write($!h, $stuff+0, $stuff.elems);
+	gcry_md_write($!h, xs-ptr($stuff), $stuff.elems);
     }
 
     method read() {

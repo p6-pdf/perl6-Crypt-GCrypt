@@ -93,6 +93,14 @@ class Crypt::GCrypt {
         }
         $buf;
     }
+
+    sub xs-ptr($stuff is copy) is export(:xs) {
+        unless $stuff.isa(CArray) {
+            $stuff = Buf.new(0) unless +$stuff;
+	    $stuff = CArray[uint8].new: $stuff.list;
+	}
+        nativecast(Pointer[$stuff.of], $stuff);
+    }
     
     multi sub infix:<+>(Pointer() $p, UInt $n) returns Pointer is export(:xs) {
 	die "Can't do arithmetic with a void pointer"
