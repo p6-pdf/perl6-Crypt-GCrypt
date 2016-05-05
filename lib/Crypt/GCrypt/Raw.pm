@@ -114,12 +114,9 @@ class Crypt::GCrypt::Raw {
                          ) is native(LIB)  is export { * }
 
     #/* Release the message digest object HD.  */
-#void gcry_md_close (gcry_md_hd_t hd);
+    #void gcry_md_close (gcry_md_hd_t hd);
     sub gcry_md_close(OpaquePointer $hd # Typedef<gcry_md_hd_t>->|gcry_md_handle*|
                   ) is native(LIB)  is export { * }
-
-#-From /usr/include/gcrypt.h:1191
-#/* Add the message digest algorithm ALGO to the digest object HD.  */
 
     my constant gcry_cipher_hd_t is export = OpaquePointer but Alloced[&gcry_cipher_close]; 
     my constant gcry_md_hd_t is export = OpaquePointer but Alloced[&gcry_md_close]; 
@@ -173,7 +170,7 @@ class Crypt::GCrypt::Raw {
     #   given as 0 if the algorithms to be used are later set using
     #   gcry_md_enable.  */
     #gcry_error_t gcry_md_open (gcry_md_hd_t *h, int algo, unsigned int flags);
-    sub gcry_md_open(Pointer[gcry_md_hd_t]  $h # Typedef<gcry_md_hd_t>->|gcry_md_handle*|*
+    sub gcry_md_open(CArray[gcry_md_hd_t]  $h # Typedef<gcry_md_hd_t>->|gcry_md_handle*|*
                      ,int32                 $algo # int
                      ,uint32                $flags # unsigned int
                     ) is native(LIB) returns gpg_error_t is export { * }
@@ -185,6 +182,22 @@ class Crypt::GCrypt::Raw {
                        ,Pointer      $key # const void*
                        ,size_t       $keylen # Typedef<size_t>->|long unsigned int|
                       ) is native(LIB) returns gpg_error_t is export { * }
+
+    #/* Pass LENGTH bytes of data in BUFFER to the digest object HD so that
+    #   it can update the digest values.  This is the actual hash
+    #   function. */
+    #void gcry_md_write (gcry_md_hd_t hd, const void *buffer, size_t length);
+    sub gcry_md_write(gcry_md_hd_t    $hd # Typedef<gcry_md_hd_t>->|gcry_md_handle*|
+                      ,Pointer        $buffer # const void*
+                      ,size_t         $length # Typedef<size_t>->|long unsigned int|
+                     ) is native(LIB)  is export { * }
+
+    #/* Read out the final digest from HD return the digest value for
+    #   algorithm ALGO. */
+    #unsigned char *gcry_md_read (gcry_md_hd_t hd, int algo);
+    sub gcry_md_read(gcry_md_hd_t     $hd # Typedef<gcry_md_hd_t>->|gcry_md_handle*|
+                     ,int32           $algo # int
+                    ) is native(LIB) returns Pointer[uint8] is export { * }
     
     #/* Map the algorithm NAME to a digest algorithm Id.  Return 0 if
     #   the algorithm name is not known. */
@@ -260,6 +273,17 @@ class Crypt::GCrypt::Raw {
                             ,size_t           $inlen # Typedef<size_t>->|long unsigned int|
                            ) is native(LIB) returns gpg_error_t is export { * }
 
+    #   code in the error value ERR.  */
+    #const char *gcry_strerror (gcry_error_t err);
+    sub gcry_strerror(gpg_error_t $err # Typedef<gcry_error_t>->|Typedef<gpg_error_t>->|unsigned int||
+                  ) is native(LIB) returns Str is export { * }
+
+    #/* Return a pointer to a string containing a description of the error
+    #   source in the error value ERR.  */
+    #const char *gcry_strsource (gcry_error_t err);
+    sub gcry_strsource(gpg_error_t $err # Typedef<gcry_error_t>->|Typedef<gpg_error_t>->|unsigned int||
+                      ) is native(LIB) returns Str is export { * }
+    
     sub memcpy(Pointer, Pointer, size_t) is native(LIB) returns Pointer is export(:memcpy) { * }
     sub memset(Pointer, int32, size_t) is native(LIB) returns Pointer is export(:memset) { * }
 

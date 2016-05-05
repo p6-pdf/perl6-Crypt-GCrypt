@@ -8,3 +8,4 @@ nok Crypt::GCrypt::Digest::digest_algo_available('wtf'), 'unknown digest name is
 ok 'sha256' ~~  Crypt::GCrypt::Digest::DigestName, 'DigestName';
 ok 'wtf' !~~  Crypt::GCrypt::Digest::DigestName, 'not DigestName';
 
+done-testing;

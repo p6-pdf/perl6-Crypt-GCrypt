@@ -1,14 +1,14 @@
 use v6;
 
 class X::Crypt::GCrypt::Error is Exception {
-    has Str  $.message is required;
-    has UInt $.domain;
-    has UInt $.status;
-    method message {"GCrypt error: {$.message}"}
+    has Str $.message is required;
+    has Str $.source = "gcrypt";
+    method message {"{$.source} error: {$.message}"}
 }
 
 class Crypt::GCrypt {
-    use Crypt::GCrypt::Raw;
+    use Crypt::GCrypt::Raw :ALL, :memcpy;
+    use NativeCall;
 
     has gcry_error_t $!err;
 
@@ -16,7 +16,13 @@ class Crypt::GCrypt {
         Proxy.new(
             FETCH => sub ($) { $!err },
             STORE => sub ($, $!err) {
-                warn "error!" if $!err;
+                if $!err {
+                    my Str $message = gcry_strerror($!err);
+                    my Str $source  = gcry_strsource($!err);
+                    die "{$source} error: {$message}";
+                    ##my X::Crypt::GCrypt::Error $stat .= new( :$message, :$source );
+                    ##$stat.throw;
+                }
             })
     }
 
@@ -64,5 +70,38 @@ class Crypt::GCrypt {
 	self!init-library();
     }
 
+    #++ replacements for some Perl XS macros
+
+    sub xs-newz(UInt $len) returns CArray is export(:xs) {
+        my $buf = CArray[uint8].new;
+        $buf[$len-1] = 0 if $len;
+        $buf;
+    }
+
+    sub xs-move(Pointer() $from, Pointer() $to, $len) is export(:xs) {
+        memcpy($to, $from, $len);
+    }
+
+    sub xs-realloc(CArray $buf is rw, $len) is export(:xs) {
+        if $len < $buf.elems {
+            my \tmp = xs-newz($len);
+            memcpy( tmp+0, $buf+0, $len);
+            $buf = tmp;
+        }
+        elsif $len > $buf.elems {
+            $buf[$len-1] = 0;
+        }
+        $buf;
+    }
+    
+    multi sub infix:<+>(Pointer() $p, UInt $n) returns Pointer is export(:xs) {
+	die "Can't do arithmetic with a void pointer"
+	    unless $p.can('of');
+	my \type = $p.of;
+	die "Can't do arithmetic with a void pointer"
+	    if type ~~ void;
+	my $pn = $p.new: +$p + $n;
+	nativecast(Pointer[$p.of], $pn);
+    }
 
 }

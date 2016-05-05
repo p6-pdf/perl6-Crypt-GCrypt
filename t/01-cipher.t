@@ -108,4 +108,18 @@ $c.start('encrypting');
 dies-ok { $c.encrypt('aaa') };
 lives-ok {$c.encrypt('aaaaaaaaaaaaaaaa') ; $c.finish; };
 
+# -- #
+## encrypted and decrypted 'one-stop' methods
+my %scheme = (
+    :$key,
+    algorithm => 'aes',
+    mode => 'cbc',
+    padding => NullPadding,
+);
+my $encrypted = Crypt::GCrypt::Cipher.encrypted( $p, |%scheme);
+is-deeply $encrypted, $e0, '.encrypted';
+
+my $decrypted = Crypt::GCrypt::Cipher.decrypted( $e0, |%scheme);
+is-deeply $decrypted.decode('latin-1'), $p, '.decrypted';
+
 done-testing;

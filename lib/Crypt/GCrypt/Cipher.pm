@@ -1,45 +1,11 @@
 use v6;
 
-use Crypt::GCrypt;
+use Crypt::GCrypt :xs;
 
 class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     use Crypt::GCrypt::Raw :ALL, :memcpy, :memset;
     use NativeCall;
 
-    multi sub infix:<+>(Pointer() $p, UInt $n) returns Pointer {
-	die "Can't do arithmetic with a void pointer"
-	    unless $p.can('of');
-	my \type = $p.of;
-	die "Can't do arithmetic with a void pointer"
-	    if type ~~ void;
-	my $pn = $p.new: +$p + $n;
-	nativecast(Pointer[$p.of], $pn);
-    }
-
-    #++ ports of some Perl XS macros
-
-    sub newz(UInt $len) returns CArray {
-        my $buf = CArray[uint8].new;
-        $buf[$len-1] = 0 if $len;
-        $buf;
-    }
-
-    sub move(Pointer() $from, Pointer() $to, $len) {
-        memcpy($to, $from, $len);
-    }
-
-    sub realloc(CArray $buf is rw, $len) {
-        if $len < $buf.elems {
-            my \tmp = newz($len);
-            memcpy( tmp+0, $buf+0, $len);
-            $buf = tmp;
-        }
-        elsif $len > $buf.elems {
-            $buf[$len-1] = 0;
-        }
-        $buf;
-    }
-    
     #--
 
     my enum Action is export(:Action) < Encrypting Decrypting >;
@@ -80,7 +46,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     multi submethod build-cipher(
 	CipherName $cipher-name,
 	Str :$mode,
-	Padding :$!padding = NoPadding,
+	Padding :$!padding = StandardPadding,
 	Bool :$secure,
 	Bool :$enable-sync,
     ) {
@@ -104,7 +70,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     multi method start('encrypting') { $.start(Encrypting) }
     multi method start('decrypting') { $.start(Decrypting) }
     multi method start(Action $!action) {
-	$!buffer = newz($!blklen);
+	$!buffer = xs-newz($!blklen);
         $!buflen = 0;
 	$!need-to-call-finish = True;    
     }
@@ -132,14 +98,14 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 
     multi method encrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
 	die "start('encrypting') was not called"
-	    unless $!action == Encrypting;
+	    unless $!action.defined && $!action == Encrypting;
 
 	if $!padding == NoPadding {
 	    die "'NoPadding' padding requires that input to .encrypt() is supplied as a multiple of blklen"
 	        unless $ilen %% $!blklen;
 	}
 
-	my $curbuf = newz($ilen + $!buflen);
+	my $curbuf = xs-newz($ilen + $!buflen);
 	memcpy($curbuf+0, $!buffer+0, $!buflen);
 	memcpy($curbuf + $!buflen, $ibuf+0, $ilen);
 
@@ -149,13 +115,13 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	}
 	else {
 	    $len -= $ilen + $!buflen;
-	    my $tmpbuf = newz($len);
+	    my $tmpbuf = xs-newz($len);
             memcpy($tmpbuf+0, $curbuf+0, $len);
 	    memcpy($!buffer+0, $curbuf + $len, ($ilen+$!buflen) - $len);
             $!buflen += $ilen - $len;
 	    $curbuf = $tmpbuf;
 	}
-	my \obuf = newz($len);
+	my \obuf = xs-newz($len);
 	$.err = gcry_cipher_encrypt($!h, obuf+0, $len, $curbuf+0, $len)
             if $len;
 
@@ -175,7 +141,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
         $!need-to-call-finish = False;
         if $!buflen < $!blklen {
             my int $rlen = $!blklen - $!buflen;
-            my $tmpbuf = newz($!buflen + $rlen);
+            my $tmpbuf = xs-newz($!buflen + $rlen);
             memcpy($tmpbuf+0, $!buffer+0, $!buflen);
             given $!padding {
                 when StandardPadding {
@@ -192,12 +158,12 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
             $!buffer = $tmpbuf;
         }
         elsif $!padding == NullPadding && $!blklen == 8 {
-            my $tmpbuf = newz($!buflen + 8);
+            my $tmpbuf = xs-newz($!buflen + 8);
             memcpy($tmpbuf+0, $!buffer+0, $!buflen);
             memset( $tmpbuf + $!buflen, 0, 8);
             $!buffer = $tmpbuf;
         }
-        my \obuf = newz($!blklen);
+        my \obuf = xs-newz($!blklen);
         $.err =  gcry_cipher_encrypt($!h, obuf+0, $!blklen, $!buffer+0, $!blklen);
         $!buffer[0] = 0;
         $!buflen = 0;
@@ -215,34 +181,34 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 
     multi method decrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
 	die "start('decrypting') was not called"
-	    unless $!action == Decrypting;
+	    unless $!action.defined && $!action == Decrypting;
         die "input must be a multiple of blklen"
             unless $ilen && $ilen %% $!blklen;
         # Concatenate buffer and input to get total length of ciphertext
         my $total-len = $!buflen + $ilen;
-        my $ciphertext = newz($total-len);
-        move($ibuf, $ciphertext, $!buflen);
-        move($ibuf, $ciphertext + $!buflen, $ilen);
+        my $ciphertext = xs-newz($total-len);
+        xs-move($ibuf, $ciphertext, $!buflen);
+        xs-move($ibuf, $ciphertext + $!buflen, $ilen);
         my $offset = $!buffer-is-decrypted ?? $!buflen !! 0;
         my $len = $total-len - $!blklen;
-        move($ciphertext + $len, $!buffer, $!blklen);
+        xs-move($ciphertext + $len, $!buffer, $!blklen);
         $!buflen = $!blklen;
-        my $obuf = newz($len);
-        move($ciphertext, $obuf, $offset);
+        my $obuf = xs-newz($len);
+        xs-move($ciphertext, $obuf, $offset);
         if $len - $offset > 0 {
             $.err = gcry_cipher_decrypt($!h, $obuf + $offset, $len - $offset, $ciphertext + $offset, $len - $offset);
         }
         $.err = gcry_cipher_decrypt($!h, $!buffer+0, $!buflen, Pointer, 0);
         $!buffer-is-decrypted = True;
         without self!find-padding( $!buffer, $!buflen) {
-            realloc($obuf, $len + $!buflen); #extend
-            move($!buffer, $obuf + $len, $!buflen);
+            xs-realloc($obuf, $len + $!buflen); #extend
+            xs-move($!buffer, $obuf + $len, $!buflen);
             $len += $!buflen;
             $!buffer[0] = 0;
             $!buflen = 0;
             $!buffer-is-decrypted = False;
         }
-        realloc($obuf, $len);
+        xs-realloc($obuf, $len);
         $obuf;
     }
     multi method decrypt($ibuf where List|Blob, |c) {
@@ -290,11 +256,11 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 
     method !finish-decrypting {
         $!need-to-call-finish = False;
-        my $obuf = newz( $!buflen );
+        my $obuf = xs-newz( $!buflen );
         my $ret-len = $!buflen;
         if $!buflen > 0 {
             if $!buffer-is-decrypted {
-                move( $!buffer, $obuf, $!buflen );
+                xs-move( $!buffer, $obuf, $!buflen );
             }
             else {
                 $.err = gcry_cipher_decrypt($!h, $obuf+0, $ret-len, $!buffer+0, $!buflen );
@@ -303,7 +269,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
             $!buflen = 0;
 
             with self!find-padding($obuf, $ret-len) -> $len {
-                realloc($obuf, $len);
+                xs-realloc($obuf, $len);
             }
 
         }
@@ -316,6 +282,24 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
             when Encrypting { self!finish-encrypting }
             when Decrypting { self!finish-decrypting }
         }
+    }
+
+    method encrypted($stuff, CipherName :$algorithm!, :$key!, |c --> Buf) {
+        my $obj = self.new( :$algorithm, |c);
+        $obj.start('encrypting');
+        $obj.setkey( $key );
+        my $encrypted = Buf.new: $obj.encrypt($stuff);
+        $encrypted.append: $obj.finish;
+        $encrypted;
+    }
+
+    method decrypted($stuff, CipherName :$algorithm!, :$key!, |c --> Buf) {
+        my $obj = self.new( :$algorithm, |c);
+        $obj.start('decrypting');
+        $obj.setkey( $key );
+        my $decrypted = Buf.new: $obj.decrypt($stuff);
+        $decrypted.append: $obj.finish;
+        $decrypted;
     }
 
 }
