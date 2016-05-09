@@ -28,12 +28,15 @@ class Crypt::GCrypt {
 
     our $Sec-Mem-Size = 2 ** 15;
 
-    method !init-library {
-	constant MIN_GCRYPT_VERSION = '1.6.0';
-
-	my $gcrypt-version = gcry_check_version();
+    method check-version {
+        constant MIN_GCRYPT_VERSION = '1.6.0';
+	state Str $gcrypt-version //= gcry_check_version();
 	die "libgcrypt version mismatch (need: >= {MIN_GCRYPT_VERSION}, got $gcrypt-version)"
 	    unless $gcrypt-version ge MIN_GCRYPT_VERSION;
+    }
+
+    method !init-library {
+        self.check-version;
 	my gcry_ctl_cmd $cmd;
 	unless (gcry_control($cmd = GCRYCTL_INITIALIZATION_FINISHED_P)) {
 	    #`{{ we just need to make sure that the right version is available

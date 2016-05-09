@@ -67,8 +67,10 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	$!h = $h-buf[0];
     }
 
-    multi method start('encrypting') { $.start(Encrypting) }
-    multi method start('decrypting') { $.start(Decrypting) }
+    multi method start(Str $_) {
+        when 'encrypting'|'encrypt' { $.start(Encrypting) }
+        when 'decrypting'|'decrypt' { $.start(Decrypting) }
+    }
     multi method start(Action $!action) {
 	$!buffer = xs-newz($!blklen);
         $!buflen = 0;
@@ -284,22 +286,27 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
         }
     }
 
-    method encrypted($stuff, CipherName :$algorithm!, :$key!, |c --> Buf) {
-        my $obj = self.new( :$algorithm, |c);
-        $obj.start('encrypting');
-        $obj.setkey( $key );
-        my $encrypted = Buf.new: $obj.encrypt($stuff);
-        $encrypted.append: $obj.finish;
-        $encrypted;
+    multi method FALLBACK(CipherName $algorithm, |c --> Buf) {
+        my &meth = method ($stuff, :$key!, :$iv, :$action='decrypt', |c) {
+            my $obj = self.new( :$algorithm, |c );
+            $obj.setkey($key);
+            $obj.setiv($_) with $iv;
+            $obj.start($action);
+            my $crypt = Buf.new: $obj."$action"($stuff);
+            $crypt.append: $obj.finish;
+            $crypt;
+        };
+        self.WHAT.^add_method($algorithm, &meth );
+        self."$algorithm"(|c);
     }
 
-    method decrypted($stuff, CipherName :$algorithm!, :$key!, |c --> Buf) {
-        my $obj = self.new( :$algorithm, |c);
-        $obj.start('decrypting');
-        $obj.setkey( $key );
-        my $decrypted = Buf.new: $obj.decrypt($stuff);
-        $decrypted.append: $obj.finish;
-        $decrypted;
+    method encrypted($stuff, CipherName :$algorithm!, |c --> Buf) {
+        self."$algorithm"($stuff, :action<encrypt>, |c);
     }
+
+    method decrypted($stuff, CipherName :$algorithm!, |c --> Buf) {
+        self."$algorithm"($stuff, :action<decrypt>, |c);
+    }
+
 
 }
