@@ -70,6 +70,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     multi method start(Str $_) {
         when 'encrypting'|'encrypt' { $.start(Encrypting) }
         when 'decrypting'|'decrypt' { $.start(Decrypting) }
+        default { die "can't start: $_" }
     }
     multi method start(Action $!action) {
 	$!buffer = xs-newz($!blklen);
@@ -189,7 +190,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
         # Concatenate buffer and input to get total length of ciphertext
         my $total-len = $!buflen + $ilen;
         my $ciphertext = xs-newz($total-len);
-        xs-move($ibuf, $ciphertext, $!buflen);
+        xs-move($!buffer, $ciphertext, $!buflen);
         xs-move($ibuf, $ciphertext + $!buflen, $ilen);
         my $offset = $!buffer-is-decrypted ?? $!buflen !! 0;
         my $len = $total-len - $!blklen;
@@ -224,13 +225,17 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     }
 
     method !find-padding(CArray $buf, int $len = $buf.elems) {
+        return Nil unless $len > 0;
         given $!padding {
             when StandardPadding {
-                my uint8 $last-char = $buf[$len-1];
-                for 1 ..^ $len {
-                    return Nil if $buf[$len - $_] != $last-char;
+                my uint8 $p = $buf[$len-1];
+                return Nil
+                    unless 0 < $p <= $len;
+
+                for 2 .. $p {
+                    return Nil unless $buf[$len - $_] == $p;
                 }
-                $len - $last-char;
+                $len - $p;
             }
             when NullPadding {
                 self!find-padding-chr($buf, $len, 0);
@@ -242,17 +247,10 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     }
 
     method !find-padding-chr($buf, $len, $ichr) {
-        my $offset = (0 ..^ $len).first: {
-            $buf[$_] == $ichr;
-        };
-
-        with $offset {
-            $_ = Nil
-                if ($_ ^..^ $len).first: {
-                    $buf[$_] != $ichr;
-                }
+        my $offset;
+        loop (my int $i = $len-1; $buf[$i] == $ichr; $i--) {
+            $offset = $i;
         }
-
         $offset;
     }
 
