@@ -39,12 +39,8 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     }
     subset CipherName of Str where { gcry_cipher_map_name($_) }
 
-    submethod BUILD(CipherName :$algorithm!, |c) {
-	self.build-cipher( $algorithm, |c);
-    }
-
-    multi submethod build-cipher(
-	CipherName $cipher-name,
+    submethod BUILD(
+	CipherName :$algorithm!,
 	Str :$mode,
 	Padding :$!padding = StandardPadding,
 	Bool :$secure,
@@ -54,16 +50,14 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	$flags +|= GCRY_CIPHER_SECURE if $secure;
 	$flags +|= GCRY_CIPHER_ENABLE_SYNC if $enable-sync;
 
-	my gcry_int $cipher-algo = gcry_cipher_map_name($cipher-name);
-	die "Unknown cipher algorithm $cipher-name"
-	    unless $cipher-algo;
-	$!blklen = gcry_cipher_get_algo_blklen($cipher-algo);
-	$!keylen = gcry_cipher_get_algo_keylen($cipher-algo);
+	my gcry_int $cipher = gcry_cipher_map_name($algorithm);
+	$!blklen = gcry_cipher_get_algo_blklen($cipher);
+	$!keylen = gcry_cipher_get_algo_keylen($cipher);
 	my CipherMode $mode-name = $mode // $!blklen > 1 ?? 'cbc' !! 'stream';
 	$!mode = self!map-cipher-mode($mode-name);
 	my $h-buf = CArray[gcry_cipher_hd_t].new;
 	$h-buf[0] = gcry_cipher_hd_t;
-	self.err = gcry_cipher_open($h-buf, $cipher-algo, $!mode, $flags);
+	self.err = gcry_cipher_open($h-buf, $cipher, $!mode, $flags);
 	$!h = $h-buf[0];
     }
 

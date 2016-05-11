@@ -16,26 +16,20 @@ class Crypt::GCrypt::Digest is Crypt::GCrypt {
     
     subset DigestName of Str where { gcry_md_map_name($_) }
 
-    submethod BUILD(DigestName :$algorithm!, |c) {
-	self.build-digest( $algorithm, |c);
-    }
-
-    submethod build-digest(
-	DigestName $digest-name,
+    submethod BUILD(
+	DigestName :$algorithm,
         Bool :$secure,
         :$hmac,
     ) {
         my gcry_uint $flags = 0;
         $flags +|= GCRY_MD_FLAG_SECURE if $secure;
         $flags +|= GCRY_MD_FLAG_HMAC with $hmac;
-        my gcry_int $digest-algo = gcry_md_map_name($digest-name);
-	die "Unknown digest algorithm $digest-name"
-	    unless $digest-algo;
-        $!digest-length = gcry_md_get_algo_dlen($digest-algo);
+        my gcry_int $digest = gcry_md_map_name($algorithm);
+        $!digest-length = gcry_md_get_algo_dlen($digest);
 
         my $h-buf = CArray[gcry_md_hd_t].new;
 	$h-buf[0] = gcry_md_hd_t;
-	self.err = gcry_md_open($h-buf, $digest-algo, $flags);
+	self.err = gcry_md_open($h-buf, $digest, $flags);
 	$!h = $h-buf[0];
         self.setkey($_) with $hmac;
     }
