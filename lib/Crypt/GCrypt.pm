@@ -81,7 +81,7 @@ class Crypt::GCrypt {
         $buf;
     }
 
-    sub xs-move(Pointer() $from, Pointer() $to, $len) is export(:xs) {
+    sub xs-move(Pointer $from, Pointer $to, $len) is export(:xs) {
         memcpy($to, $from, $len);
     }
 
@@ -102,10 +102,10 @@ class Crypt::GCrypt {
             $stuff = Buf.new(0) unless +$stuff;
 	    $stuff = CArray[uint8].new: $stuff.list;
 	}
-        nativecast(Pointer[$stuff.of], $stuff);
+        $stuff + 0;
     }
     
-    multi sub infix:<+>(Pointer() $p, UInt $n) returns Pointer is export(:xs) {
+    multi sub infix:<+>(Pointer $p, UInt $n) returns Pointer is export(:xs) {
 	die "Can't do arithmetic with a void pointer"
 	    unless $p.can('of');
 	my \type = $p.of;
@@ -113,6 +113,9 @@ class Crypt::GCrypt {
 	    if type ~~ void;
 	my $pn = $p.new: +$p + $n;
 	nativecast(Pointer[$p.of], $pn);
+    }
+    multi sub infix:<+>(CArray $c, UInt $n) returns Pointer is export(:xs) {
+        nativecast(Pointer[$c.of], $c) + $n;
     }
 
 }

@@ -184,14 +184,14 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
         # Concatenate buffer and input to get total length of ciphertext
         my $total-len = $!buflen + $ilen;
         my $ciphertext = xs-newz($total-len);
-        xs-move($!buffer, $ciphertext, $!buflen);
-        xs-move($ibuf, $ciphertext + $!buflen, $ilen);
+        xs-move($!buffer+0, $ciphertext+0, $!buflen);
+        xs-move($ibuf+0, $ciphertext + $!buflen, $ilen);
         my $offset = $!buffer-is-decrypted ?? $!buflen !! 0;
         my $len = $total-len - $!blklen;
-        xs-move($ciphertext + $len, $!buffer, $!blklen);
+        xs-move($ciphertext + $len, $!buffer+0, $!blklen);
         $!buflen = $!blklen;
         my $obuf = xs-newz($len);
-        xs-move($ciphertext, $obuf, $offset);
+        xs-move($ciphertext+0, $obuf+0, $offset);
         if $len - $offset > 0 {
             $.err = gcry_cipher_decrypt($!h, $obuf + $offset, $len - $offset, $ciphertext + $offset, $len - $offset);
         }
@@ -199,7 +199,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
         $!buffer-is-decrypted = True;
         without self!find-padding( $!buffer, $!buflen) {
             xs-realloc($obuf, $len + $!buflen); #extend
-            xs-move($!buffer, $obuf + $len, $!buflen);
+            xs-move($!buffer+0, $obuf + $len, $!buflen);
             $len += $!buflen;
             $!buffer[0] = 0;
             $!buflen = 0;
@@ -254,7 +254,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
         my $ret-len = $!buflen;
         if $!buflen > 0 {
             if $!buffer-is-decrypted {
-                xs-move( $!buffer, $obuf, $!buflen );
+                xs-move( $!buffer+0, $obuf+0, $!buflen );
             }
             else {
                 $.err = gcry_cipher_decrypt($!h, $obuf+0, $ret-len, $!buffer+0, $!buflen );
