@@ -115,6 +115,7 @@ class Crypt::GCrypt {
 	nativecast(Pointer[$p.of], $pn);
     }
     multi sub infix:<+>(CArray $c, UInt $n) returns Pointer is export(:xs) {
+        die "Pointer out of range: $n > {$c.elems}" if $n > $c.elems;
         nativecast(Pointer[$c.of], $c) + $n;
     }
 

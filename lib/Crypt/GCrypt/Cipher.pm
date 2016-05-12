@@ -107,6 +107,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	memcpy($curbuf + $!buflen, $ibuf+0, $ilen);
 
 	if (my int $len = $ilen + $!buflen)  %%  $!blklen {
+	    $len = $ilen + $!buflen;
 	    $!buffer[0] = 0;
 	    $!buflen = 0;
 	}
@@ -114,7 +115,10 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	    $len -= $ilen + $!buflen;
 	    my $tmpbuf = xs-newz($len);
             memcpy($tmpbuf+0, $curbuf+0, $len);
-	    memcpy($!buffer+0, $curbuf + $len, ($ilen+$!buflen) - $len);
+	    my int $n = $ilen + $!buflen - $len;
+	    xs-realloc($!buffer, $n)
+		unless $!buffer.elems >= $n;
+	    memcpy($!buffer+0, $curbuf + $len, $n);
             $!buflen += $ilen - $len;
 	    $curbuf = $tmpbuf;
 	}
