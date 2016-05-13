@@ -105,7 +105,8 @@ $c = Crypt::GCrypt::Cipher.new(
     :padding(NoPadding),
     );
 $c.start('encrypting');
-dies-ok { $c.encrypt('aaa') };
+dies-ok { $c.encrypt('aaa'); $c.finish };
+$c.start('encrypting');;
 lives-ok {$c.encrypt('aaaaaaaaaaaaaaaa') ; $c.finish; };
 
 # -- #

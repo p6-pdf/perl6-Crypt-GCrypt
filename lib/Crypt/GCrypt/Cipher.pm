@@ -97,31 +97,23 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	die "start('encrypting') was not called"
 	    unless $!action.defined && $!action == Encrypting;
 
-	if $!padding == NoPadding {
-	    die "'NoPadding' padding requires that input to .encrypt() is supplied as a multiple of blklen"
-	        unless $ilen %% $!blklen;
-	}
-
 	my $curbuf = xs-newz($ilen + $!buflen);
 	memcpy($curbuf+0, $!buffer+0, $!buflen);
 	memcpy($curbuf + $!buflen, $ibuf+0, $ilen);
+	my int $len = $ilen + $!buflen;
 
-	if (my int $len = $ilen + $!buflen)  %%  $!blklen {
-	    $len = $ilen + $!buflen;
+	if ($len  %%  $!blklen) {
+	    # exact fit
 	    $!buffer[0] = 0;
 	    $!buflen = 0;
 	}
 	else {
-	    $len -= $ilen + $!buflen;
-	    my $tmpbuf = xs-newz($len);
-            memcpy($tmpbuf+0, $curbuf+0, $len);
-	    my int $n = $ilen + $!buflen - $len;
-	    xs-realloc($!buffer, $n)
-		unless $!buffer.elems >= $n;
-	    memcpy($!buffer+0, $curbuf + $len, $n);
-            $!buflen += $ilen - $len;
-	    $curbuf = $tmpbuf;
+	    # partial block - carry forward
+	    $!buflen = $len mod $!blklen;
+	    $len -= $!buflen;
+	    memcpy($!buffer+0, $curbuf+$len, $!buflen);
 	}
+
 	my \obuf = xs-newz($len);
 	$.err = gcry_cipher_encrypt($!h, obuf+0, $len, $curbuf+0, $len)
             if $len;
@@ -140,11 +132,14 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 
     method !finish-encrypting {
         $!need-to-call-finish = False;
-        if $!buflen < $!blklen {
+        if $!buflen || $!padding == StandardPadding {
             my int $rlen = $!blklen - $!buflen;
             my $tmpbuf = xs-newz($!buflen + $rlen);
             memcpy($tmpbuf+0, $!buffer+0, $!buflen);
             given $!padding {
+		when NoPadding {
+		    die "'NoPadding' padding requires that input to .encrypt() is supplied as a multiple of blklen";
+		}
                 when StandardPadding {
                     memset( $tmpbuf + $!buflen, $rlen, $rlen);
                 }
