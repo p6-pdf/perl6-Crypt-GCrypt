@@ -97,10 +97,10 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	die "start('encrypting') was not called"
 	    unless $!action.defined && $!action == Encrypting;
 
-	my $curbuf = xs-newz($ilen + $!buflen);
-	memcpy($curbuf+0, $!buffer+0, $!buflen);
-	memcpy($curbuf + $!buflen, $ibuf+0, $ilen);
 	my int $len = $ilen + $!buflen;
+	my $curbuf = xs-newz($len);
+	memcpy($curbuf+0, $!buffer+0, $!buflen) if $!buflen;
+	memcpy($curbuf + $!buflen, $ibuf+0, $ilen) if $ilen;
 
 	if ($len  %%  $!blklen) {
 	    # exact fit
@@ -132,9 +132,11 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 
     method !finish-encrypting {
         $!need-to-call-finish = False;
+	my $len = 0;
         if $!buflen || $!padding == StandardPadding {
+	    $len = $!blklen;
             my int $rlen = $!blklen - $!buflen;
-            my $tmpbuf = xs-newz($!buflen + $rlen);
+            my $tmpbuf = xs-newz($len);
             memcpy($tmpbuf+0, $!buffer+0, $!buflen);
             given $!padding {
 		when NoPadding {
@@ -154,25 +156,18 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
             $!buffer = $tmpbuf;
         }
         elsif $!padding == NullPadding && $!blklen == 8 {
-            my $tmpbuf = xs-newz($!buflen + 8);
+	    $len = $!buflen + 8;
+            my $tmpbuf = xs-newz($len);
             memcpy($tmpbuf+0, $!buffer+0, $!buflen);
             memset( $tmpbuf + $!buflen, 0, 8);
             $!buffer = $tmpbuf;
         }
-        my \obuf = xs-newz($!blklen);
-        $.err =  gcry_cipher_encrypt($!h, obuf+0, $!blklen, $!buffer+0, $!blklen);
+        my \obuf = xs-newz($len);
+        $.err =  gcry_cipher_encrypt($!h, obuf+0, $len, $!buffer+0, $len)
+	    if $len;
         $!buffer[0] = 0;
         $!buflen = 0;
         obuf;
-    }
-
-    sub _dump_buf($buf, $len) {
-        $*ERR.print: "[ ";
-        loop (my $i = 0; $i < $len; $i++) {
-            my uint8 $n = $buf[$i];
-            $*ERR.print: sprintf("%x, ", $n);
-        }
-        $*ERR.print: "]\n";        
     }
 
     multi method decrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
