@@ -82,7 +82,7 @@ is $d.decode('latin-1'), $p;
 
 $c = Crypt::GCrypt::Cipher.new(
     :algorithm<arcfour>,
-    :padding(NullPadding),
+    :padding(NoPadding),
 );
 is $c.keylen, 16;
 is $c.blklen, 1;
