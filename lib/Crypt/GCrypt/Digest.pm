@@ -55,14 +55,14 @@ class Crypt::GCrypt::Digest is Crypt::GCrypt {
         $buf;
     }
 
-    multi method FALLBACK(DigestName $algorithm, $stuff, |c --> Buf) {
-        my &meth = method ($_) {
-            my $obj = self.new( :$algorithm, |c );
-            $obj.write: $_;
+    multi method FALLBACK(DigestName $algorithm, |c --> Buf) {
+        my &meth = method ($stuff, |p) {
+            my $obj = self.new( :$algorithm, |p );
+            $obj.write: $stuff;
             Buf.new: $obj.read;
         };
         self.WHAT.^add_method($algorithm, &meth );
-        self."$algorithm"($stuff);
+        self."$algorithm"(|c);
     }
 
 }

@@ -40,7 +40,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 
     submethod BUILD(
 	CipherName :$algorithm!,
-	Str :$mode,
+	Str :mode($mode-name) is copy,
 	Padding :$padding,
 	Bool :$secure,
 	Bool :$enable-sync,
@@ -52,7 +52,9 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	my gcry_int $cipher = gcry_cipher_map_name($algorithm);
 	$!blklen = gcry_cipher_get_algo_blklen($cipher);
 	$!keylen = gcry_cipher_get_algo_keylen($cipher);
-	my CipherMode $mode-name = $mode // $!blklen > 1 ?? 'cbc' !! 'stream';
+	$mode-name //= $!blklen > 1 ?? 'cbc' !! 'stream';
+        die "invalid mode: $mode-name"
+            unless $mode-name ~~ CipherMode;
 	$!mode = self!map-cipher-mode($mode-name);
         $!padding = $padding // ($!mode == GCRY_CIPHER_MODE_STREAM ?? NoPadding !! StandardPadding);
         die "Padding is not supported for stream-mode"
@@ -74,31 +76,23 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	$!need-to-call-finish = True;    
     }
 
-    multi method setkey(Str $key, Str :$enc = 'latin-1') {
-	$.setkey( $key.encode($enc) );
-    }
-    multi method setkey($mykey is copy) {
-        unless $mykey.isa(CArray) {
-	    $mykey = CArray[uint8].new: $mykey.list;
-	    $mykey[$!keylen] = 0;
-	}
-	$.err = gcry_cipher_setkey($!h, $mykey+0, $!keylen);
+    method setkey($k, |c) {
+        my $key = xs-array($k, |c);
+        my $len = min($key.elems, $!keylen);
+	$.err = gcry_cipher_setkey($!h, $key+0, $len);
     }
 
-    multi method setiv(Str $key, Str :$enc = 'latin-1') {
-	$.setiv( $key.encode($enc) );
-    }
-    multi method setiv(|c) {
-	my $iv = CArray[uint8].new(|c);
-	$iv[$!blklen] = 0
-	    unless $iv.elems >= $!blklen;
+    method setiv($k=[], |c) {
+	my $iv = xs-array($k, |c);
+        $iv[$!blklen-1] = 0 unless $iv.elems >= $!blklen;
 	$.err = gcry_cipher_setiv($!h, $iv+0, $!blklen);
     }
 
-    multi method encrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
+    method encrypt($buf, |c) {
 	die "start('encrypting') was not called"
 	    unless $!action.defined && $!action == Encrypting;
-
+        my $ibuf = xs-array($buf, |c);
+        my uint $ilen = $ibuf.elems;
 	my int $len = $ilen + $!buflen;
 	my $curbuf = xs-newz($len);
 	memcpy($curbuf+0, $!buffer+0, $!buflen) if $!buflen;
@@ -121,15 +115,6 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
             if $len;
 
 	obuf;
-    }
-    multi method encrypt($ibuf where List|Blob, |c) {
-        $.encrypt( CArray[uint8].new($ibuf), |c);
-    }
-    multi method encrypt(Str $in, Str :$enc = 'latin-1') {
-	$.encrypt( $in.encode($enc) );
-    }
-    multi method encrypt(@buf, |c) {
-        $.encrypt( CArray[uint8].new: @buf, |c);
     }
 
     method !finish-encrypting {
@@ -172,9 +157,11 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
         obuf;
     }
 
-    multi method decrypt(CArray $ibuf, uint $ilen = $ibuf.elems) {
+    method decrypt($buf, |c) {
 	die "start('decrypting') was not called"
 	    unless $!action.defined && $!action == Decrypting;
+        my $ibuf = xs-array($buf, |c);
+        my $ilen = $ibuf.elems;
         die "input must be a multiple of blklen"
             unless $ilen %% $!blklen;
         # Concatenate buffer and input to get total length of ciphertext
@@ -197,15 +184,6 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
             $!buffer[0] = 0;
         }
         $obuf;
-    }
-    multi method decrypt($ibuf where List|Blob, |c) {
-        $.decrypt( CArray[uint8].new($ibuf), |c);
-    }
-    multi method decrypt(Str $in, Str :$enc = 'latin-1') {
-	$.decrypt( $in.encode($enc) );
-    }
-    multi method decrypt(@buf, |c) {
-        $.decrypt( CArray[uint8].new: @buf, |c);
     }
 
     method !find-padding(CArray $buf, int $len = $buf.elems) {
@@ -256,8 +234,8 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     }
 
     multi method FALLBACK(CipherName $algorithm, |c --> Buf) {
-        my &meth = method ($stuff, :$key!, :$iv, :$action='decrypt', |c) {
-            my $obj = self.new( :$algorithm, |c );
+        my &meth = method ($stuff, :$key!, :$iv, :$action='decrypt', |p) {
+            my $obj = self.new( :$algorithm, |p );
             $obj.setkey($key);
             $obj.setiv($_) with $iv;
             $obj.start($action);

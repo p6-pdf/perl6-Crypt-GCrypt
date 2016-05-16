@@ -97,13 +97,15 @@ class Crypt::GCrypt {
         $buf;
     }
 
-    sub xs-ptr($stuff is copy) is export(:xs) {
-        unless $stuff.isa(CArray) {
-            $stuff = Buf.new(0) unless +$stuff;
-	    $stuff = CArray[uint8].new: $stuff.list;
-	}
-        $stuff + 0;
+    proto sub xs-array($) is export(:xs) {*}
+    multi sub xs-array(CArray:D $stuff) { $stuff }
+    multi sub xs-array(Str $stuff, Str :$enc = 'latin-1') {
+        CArray[uint8].new: $stuff.encode($enc).list;
     }
+    multi sub xs-array($stuff is copy) is default {
+	CArray[uint8].new: +$stuff ?? $stuff.list !! 0;
+    }
+    sub xs-ptr($stuff, |c) is export(:xs) { xs-array($stuff, |c) + 0 }
     
     multi sub infix:<+>(Pointer $p, UInt $n) returns Pointer is export(:xs) {
 	die "Can't do arithmetic with a void pointer"
