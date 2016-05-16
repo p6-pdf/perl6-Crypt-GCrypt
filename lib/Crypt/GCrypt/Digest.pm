@@ -56,10 +56,13 @@ class Crypt::GCrypt::Digest is Crypt::GCrypt {
     }
 
     multi method FALLBACK(DigestName $algorithm, |c --> Buf) {
+        my int $algo = gcry_md_map_name($algorithm);
+        my int $digest-length = gcry_md_get_algo_dlen($algo);
         my &meth = method ($stuff, |p) {
-            my $obj = self.new( :$algorithm, |p );
-            $obj.write: $stuff;
-            Buf.new: $obj.read;
+            my $ibuf = xs-array($stuff, |p);
+            my $obuf = xs-newz( $digest-length );
+            gcry_md_hash_buffer( $algo, $obuf+0, $ibuf+0, $ibuf.elems);
+            Buf.new: $obuf;
         };
         self.WHAT.^add_method($algorithm, &meth );
         self."$algorithm"(|c);

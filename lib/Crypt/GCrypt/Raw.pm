@@ -160,8 +160,8 @@ class Crypt::GCrypt::Raw {
     #void gcry_md_hash_buffer (int algo, void *digest,
     #                          const void *buffer, size_t length);
     sub gcry_md_hash_buffer(gcry_int     $algo # int
-			    ,CArray      $digest # void*
-			    ,CArray      $buffer # const void*
+			    ,Pointer     $digest # void*
+			    ,Pointer     $buffer # const void*
 			    ,size_t      $length # Typedef<size_t>->|long unsigned int|
 	) is native(LIB) returns CArray[uint8] is export { * }
 
