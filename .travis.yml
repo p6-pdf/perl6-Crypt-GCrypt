@@ -1,0 +1,11 @@
+language: perl6
+sudo: false
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get install -y libgcrypt20 
+perl6:
+  - latest
+os:
+  - linux
+
+  
