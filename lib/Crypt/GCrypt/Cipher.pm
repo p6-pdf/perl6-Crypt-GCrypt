@@ -13,7 +13,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     has Action $!action;
     has Padding $!padding = StandardPadding;
     has gcry_cipher_hd_t $!h;
-    has gcry_int $!mode;
+    has int32 $!mode;
     has CArray $!buffer;
     has size_t $!buflen;
     has size_t $.blklen;
@@ -45,11 +45,11 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	Bool :$secure,
 	Bool :$enable-sync,
     ) {
-	my gcry_uint $flags = 0;
+	my uint32 $flags = 0;
 	$flags +|= GCRY_CIPHER_SECURE if $secure;
 	$flags +|= GCRY_CIPHER_ENABLE_SYNC if $enable-sync;
 
-	my gcry_int $cipher = gcry_cipher_map_name($algorithm);
+	my int32 $cipher = gcry_cipher_map_name($algorithm);
 	$!blklen = gcry_cipher_get_algo_blklen($cipher);
 	$!keylen = gcry_cipher_get_algo_keylen($cipher);
 	$mode-name //= $!blklen > 1 ?? 'cbc' !! 'stream';

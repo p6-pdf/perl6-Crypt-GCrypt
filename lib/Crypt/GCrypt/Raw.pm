@@ -4,17 +4,13 @@ class Crypt::GCrypt::Raw {
     use NativeCall;
     use NativeCall::Types;
 
-    constant LIB = ('gcrypt', v20);
+    constant LIB = 'gcrypt';
 
     my role Alloced[&destroy-sub] {
 	submethod DESTROY {
 	    &destroy-sub(self);
 	}
     }
-
-    #| see gcrypt.h, also gtrixie generated bindings in /etc/gcrypt.pm
-    my constant gcry_int  is export = int32;
-    my constant gcry_uint is export = uint32;
 
     my Int enum gcry_cipher_modes is export (
 	GCRY_CIPHER_MODE_NONE => 0,
@@ -122,7 +118,7 @@ class Crypt::GCrypt::Raw {
     my constant gcry_md_hd_t is export = OpaquePointer but Alloced[&gcry_md_close]; 
     my constant gcry_error_t is export = OpaquePointer;
     my constant gpg_error_t is export = OpaquePointer;
-    my constant gcry_ctl_cmd is export = gcry_uint;
+    my constant gcry_ctl_cmd is export = uint32;
 
     #/* Check that the library fulfills the version requirement.  */
     #const char *gcry_check_version (const char *req_version);
@@ -135,7 +131,7 @@ class Crypt::GCrypt::Raw {
     #gcry_error_t gcry_control (enum gcry_ctl_cmds CMD, ...);
     sub gcry_control(gcry_ctl_cmd $CMD # gcry_ctl_cmds
                  ) is native(LIB) returns gpg_error_t is export { * }
-    sub gcry_control2(gcry_ctl_cmd $CMD, gcry_int $, gcry_int $ # gcry_ctl_cmds
+    sub gcry_control2(gcry_ctl_cmd $CMD, int32 $, int32 $ # gcry_ctl_cmds
                  ) is native(LIB) is symbol('gcry_control') returns gpg_error_t is export { * }
 
     #/* Map the algorithm name NAME to an cipher algorithm ID.  Return 0 if
@@ -149,7 +145,7 @@ class Crypt::GCrypt::Raw {
     #/* Retrieve the length in bytes of the digest yielded by algorithm
     #   ALGO. */
     #unsigned int gcry_md_get_algo_dlen (int algo);
-    sub gcry_md_get_algo_dlen(gcry_int $algo # int
+    sub gcry_md_get_algo_dlen(int32 $algo # int
         ) is native(LIB) returns uint32 is export { * }
 
     #/* Convenience function to calculate the hash from the data in BUFFER
@@ -159,7 +155,7 @@ class Crypt::GCrypt::Raw {
     #   algorithm. */
     #void gcry_md_hash_buffer (int algo, void *digest,
     #                          const void *buffer, size_t length);
-    sub gcry_md_hash_buffer(gcry_int     $algo # int
+    sub gcry_md_hash_buffer(int32     $algo # int
 			    ,Pointer     $digest # void*
 			    ,Pointer     $buffer # const void*
 			    ,size_t      $length # Typedef<size_t>->|long unsigned int|
@@ -209,14 +205,14 @@ class Crypt::GCrypt::Raw {
 
     #/* Retrieve the key length in bytes used with algorithm A. */
     #size_t gcry_cipher_get_algo_keylen (int algo);
-    our sub gcry_cipher_get_algo_keylen(gcry_int $algo)
+    our sub gcry_cipher_get_algo_keylen(int32 $algo)
         returns size_t
         is export
         is native(LIB) { * }
 
     #/* Retrieve the block length in bytes used with algorithm A. */
     #size_t gcry_cipher_get_algo_blklen (int algo);
-    our sub gcry_cipher_get_algo_blklen(gcry_int $algo)
+    our sub gcry_cipher_get_algo_blklen(int32 $algo)
         returns size_t
         is export
         is native(LIB) { * }
@@ -226,9 +222,9 @@ class Crypt::GCrypt::Raw {
 #gcry_error_t gcry_cipher_open (gcry_cipher_hd_t *handle,
 #                              int algo, int mode, unsigned int flags);
     sub gcry_cipher_open(CArray $handle-ptr # Typedef<gcry_cipher_hd_t>->|gcry_cipher_handle*|*
-			 ,gcry_int                     $algo # int
-			 ,gcry_int                     $mode # int
-			 ,gcry_uint                    $flags # unsigned int
+			 ,int32                     $algo # int
+			 ,int32                     $mode # int
+			 ,uint32                    $flags # unsigned int
                      ) is native(LIB) returns gpg_error_t is export { * }
 
     #/* Set KEY of length KEYLEN bytes for the cipher handle HD.  */

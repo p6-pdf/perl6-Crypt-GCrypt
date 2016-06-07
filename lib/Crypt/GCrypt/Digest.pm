@@ -21,10 +21,10 @@ class Crypt::GCrypt::Digest is Crypt::GCrypt {
         Bool :$secure,
         :$hmac,
     ) {
-        my gcry_uint $flags = 0;
+        my uint32 $flags = 0;
         $flags +|= GCRY_MD_FLAG_SECURE if $secure;
         $flags +|= GCRY_MD_FLAG_HMAC with $hmac;
-        my gcry_int $digest = gcry_md_map_name($algorithm);
+        my int32 $digest = gcry_md_map_name($algorithm);
         $!digest-length = gcry_md_get_algo_dlen($digest);
 
         my $h-buf = CArray[gcry_md_hd_t].new;
