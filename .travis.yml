@@ -1,12 +1,8 @@
-language: perl6
 sudo: required
 dist: trusty
+language: perl6
 before_install:
-  - wget http://security.ubuntu.com/ubuntu/pool/universe/libg/libgcrypt20/libgcrypt20_1.6.1-2ubuntu1.14.04.1_i386.deb
-  - sudo dpkg -i libgcrypt20_1.6.1-2ubuntu1.14.04.1_i386.deb
-##  - sudo apt-get -qq update
-##  - sudo apt-get install -y libgcrypt20 
+  - sudo apt-get -qq update
+  - sudo apt-get install -y libgcrypt20 
 perl6:
   - latest
-os:
-  - linux
