@@ -2,8 +2,7 @@ sudo: required
 dist: trusty
 language: perl6
 before_install:
-  - sudo apt-get update
-  - sudo apt-cache search libgcrypt
+  - sudo apt-get -q update
   - sudo apt-get install -y libgcrypt20 
 perl6:
   - latest
