@@ -1,9 +1,14 @@
 use v6;
 use Test;
 use Crypt::GCrypt::Cipher :Padding;
+use Crypt::GCrypt::Raw;
 use NativeCall;
 
-ok Crypt::GCrypt::Cipher::cipher_algo_available('aes');
+my $version = gcry_check_version;
+
+ok Crypt::GCrypt::Cipher::cipher_algo_available('aes'), 'aes available';
+todo "need GCrypt 1.6.0+ for arcfour & blowfish"
+    unless $version ge '1.6.0';
 ok Crypt::GCrypt::Cipher::cipher_algo_available('arcfour');
 ok Crypt::GCrypt::Cipher::cipher_algo_available('twofish');
 
@@ -59,43 +64,47 @@ is-deeply $e, $e0;
 
 # --- #
 
-$c = Crypt::GCrypt::Cipher.new(
-    :algorithm<twofish>,
-    :padding(NullPadding),
-);
-is $c.keylen, 32;
-is $c.blklen, 16;
-$c.start('encrypting');
-$c.setkey($key);
-$c.setiv(my $iv = 'explicit iv');
-$e = Buf.new: $c.encrypt($p);
-$e.append: $c.finish;
+if $version ge '1.6.0' {
+    $c = Crypt::GCrypt::Cipher.new(
+        :algorithm<twofish>,
+        :padding(NullPadding),
+    );
+    is $c.keylen, 32;
+    is $c.blklen, 16;
+    $c.start('encrypting');
+    $c.setkey($key);
+    $c.setiv(my $iv = 'explicit iv');
+    $e = Buf.new: $c.encrypt($p);
+    $e.append: $c.finish;
 
-$c.start('decrypting');
-$c.setiv($iv);
-$d = Buf.new: $c.decrypt($e);
-$d.append: $c.finish;
-is $d.decode('latin-1'), $p;
+    $c.start('decrypting');
+    $c.setiv($iv);
+    $d = Buf.new: $c.decrypt($e);
+    $d.append: $c.finish;
+    is $d.decode('latin-1'), $p;
 
-# --- #
+    # --- #
 
-$c = Crypt::GCrypt::Cipher.new(
-    :algorithm<arcfour>,
-    :padding(NoPadding),
-);
-is $c.keylen, 16;
-is $c.blklen, 1;
-$c.start('encrypting');
-$c.setkey($key);
-$e = Buf.new: $c.encrypt($p);
-is-deeply [$e.list], [ 0x02, 0xa9, 0x8d, 0x20, 0xa1, 0x76, 0x72, 0x9e, 0xa7, 0xcd];
+    $c = Crypt::GCrypt::Cipher.new(
+        :algorithm<arcfour>,
+        :padding(NoPadding),
+    );
+    is $c.keylen, 16;
+    is $c.blklen, 1;
+    $c.start('encrypting');
+    $c.setkey($key);
+    $e = Buf.new: $c.encrypt($p);
+    is-deeply [$e.list], [ 0x02, 0xa9, 0x8d, 0x20, 0xa1, 0x76, 0x72, 0x9e, 0xa7, 0xcd];
 
-$c.setkey($key);
-$c.start('decrypting');
-$d = Buf.new: $c.decrypt($e);
-$d.append: $c.finish;
-is $d.decode('latin-1'), $p;
-
+    $c.setkey($key);
+    $c.start('decrypting');
+    $d = Buf.new: $c.decrypt($e);
+    $d.append: $c.finish;
+    is $d.decode('latin-1'), $p;
+}
+else {
+    skip "need GCrypt 1.6.0+ for arcfour & blowfish", 6;
+}
 # --- #
 ### 'none' padding
 
