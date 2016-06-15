@@ -142,11 +142,29 @@ class Crypt::GCrypt::Raw {
         is export
         is native(LIB) { * }
 
+    #/* Retrieve various information about the cipher algorithm ALGO. */
+    #gcry_error_t gcry_cipher_algo_info (int algo, int what, void *buffer,
+    #                                   size_t *nbytes);
+    sub gcry_cipher_algo_info(int32                         $algo # int
+                              ,int32                         $what # int
+                              ,Pointer                       $buffer? # void*
+                              ,Pointer[size_t]               $nbytes? # Typedef<size_t>->|long unsigned int|*
+                             ) is native(LIB) returns gpg_error_t is export { * }
+
+
     #/* Retrieve the length in bytes of the digest yielded by algorithm
     #   ALGO. */
     #unsigned int gcry_md_get_algo_dlen (int algo);
     sub gcry_md_get_algo_dlen(int32 $algo # int
         ) is native(LIB) returns uint32 is export { * }
+    #/* Retrieve various information about the algorithm ALGO.  */
+    #gcry_error_t gcry_md_algo_info (int algo, int what, void *buffer,
+    #                               size_t *nbytes);
+    sub gcry_md_algo_info(int32                         $algo # int
+                          ,int32                         $what # int
+                          ,Pointer                       $buffer? # void*
+                          ,Pointer[size_t]               $nbytes? # Typedef<size_t>->|long unsigned int|*
+                         ) is native(LIB) returns gpg_error_t is export { * }
 
     #/* Convenience function to calculate the hash from the data in BUFFER
     #   of size LENGTH using the algorithm ALGO avoiding the creating of a

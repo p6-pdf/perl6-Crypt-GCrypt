@@ -10,10 +10,12 @@ class Crypt::GCrypt::Digest is Crypt::GCrypt {
     has gcry_md_hd_t $!h;
     has uint32 $.digest-length;
 
-    our sub digest_algo_available(Str $name --> Bool) {
-	? gcry_md_map_name($name.lc)
+    method algo-available(Str $name --> Bool) {
+	given gcry_md_map_name($name.lc) {
+            when * > 0 { ! gcry_md_algo_info($_, GCRYCTL_TEST_ALGO) }
+            default { False }
+        }
     }
-    
     subset DigestName of Str where { gcry_md_map_name($_) }
 
     submethod BUILD(

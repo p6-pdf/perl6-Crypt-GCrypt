@@ -207,11 +207,11 @@ my %hmacs = (
   },
 );
 
-plan + grep {Crypt::GCrypt::Digest::digest_algo_available($_)}, flat map *.keys, flat (%dgsts.values, %hmacs.values);
+plan + grep {Crypt::GCrypt::Digest.algo-available($_)}, flat map *.keys, flat (%dgsts.values, %hmacs.values);
 
 for (sort keys %dgsts) -> $data {
     for (sort keys %dgsts{$data}) -> $algorithm {
-        next unless Crypt::GCrypt::Digest::digest_algo_available($algorithm);
+        next unless Crypt::GCrypt::Digest.algo-available($algorithm);
         my $md = Crypt::GCrypt::Digest.new( :$algorithm );
         die "failed to create digest object with algorithm $algorithm" unless defined $md;
         $md.write($data);
@@ -223,7 +223,7 @@ for (sort keys %dgsts) -> $data {
 
 for (sort keys %hmacs) -> $data {
   for (sort keys %hmacs{$data}) -> $algorithm {
-    next unless Crypt::GCrypt::Digest::digest_algo_available($algorithm);
+    next unless Crypt::GCrypt::Digest.algo-available($algorithm);
     my $md = Crypt::GCrypt::Digest.new(
                                 :$algorithm,
                                 :hmac('monkey monkey monkey monkey'),

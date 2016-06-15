@@ -33,9 +33,13 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	%CIPHER-MODE{$mode}
     }
 
-    our sub cipher_algo_available(Str $name --> Bool) {
-	? gcry_cipher_map_name($name.lc)
+    method algo-available(Str $name --> Bool) {
+	given gcry_cipher_map_name($name.lc) {
+            when * > 0 { ! gcry_cipher_algo_info($_, GCRYCTL_TEST_ALGO) }
+            default { False }
+        }
     }
+
     subset CipherName of Str where { gcry_cipher_map_name($_) }
 
     submethod BUILD(

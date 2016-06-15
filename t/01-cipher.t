@@ -4,11 +4,11 @@ use Crypt::GCrypt::Cipher :Padding;
 use Crypt::GCrypt::Raw;
 use NativeCall;
 
-my $version = gcry_check_version;
+my $version = Crypt::GCrypt::Cipher.gcrypt-version;
 diag "found LibGCrypt version: $version"; 
-ok Crypt::GCrypt::Cipher::cipher_algo_available('aes'), 'aes available';
-ok Crypt::GCrypt::Cipher::cipher_algo_available('arcfour'), 'arcfour available';
-ok Crypt::GCrypt::Cipher::cipher_algo_available('twofish'), 'twofish available';
+ok Crypt::GCrypt::Cipher.algo-available('aes'), 'aes available';
+ok Crypt::GCrypt::Cipher.algo-available('arcfour'), 'arcfour available';
+ok Crypt::GCrypt::Cipher.algo-available('twofish'), 'twofish available';
 
 my $p = 'plain text';
 my Buf $e0 .= new: [0xC7, 0x96, 0x84, 0x35, 0x58, 0xCE, 0xFA, 0x15, 0x7B, 0xF1, 0x08, 0xAB, 0x79, 0x82, 0x3A, 0x5A, ];
