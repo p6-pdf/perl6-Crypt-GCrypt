@@ -82,6 +82,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 
     method setkey($k, |c) {
         my $key = xs-array($k, |c);
+        $key[$!keylen-1] = 0 unless $key.elems >= $!keylen;
         my $len = min($key.elems, $!keylen);
 	$.err = gcry_cipher_setkey($!h, $key+0, $len);
     }
@@ -121,37 +122,34 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	obuf;
     }
 
+    sub pad($buffer is rw, $buflen, $blklen, :$padding = StandardPadding) {
+        my int $rlen = $blklen - $buflen;
+        if $padding == NoPadding {
+            die "'NoPadding' padding requires that input to .encrypt() issupplied as a multiple of blklen"
+                if $rlen;
+        }
+        elsif $rlen {
+            my $tmpbuf = xs-newz($blklen);
+            memcpy($tmpbuf+0, $buffer+0, $buflen);
+            my $pad = do given $padding {
+                when StandardPadding { $rlen }
+                when NullPadding     { 0 }
+                when SpacePadding    { ' '.ord };
+                default { die "unknown padding mode: $_" }
+            };
+            memset( $tmpbuf + $buflen, $pad, $rlen);
+            $buffer = $tmpbuf;
+        }
+    }
+    
     method !finish-encrypting {
         $!need-to-call-finish = False;
 	my $len = 0;
         if $!buflen || $!padding == StandardPadding {
-	    $len = $!blklen;
-            my int $rlen = $!blklen - $!buflen;
-            my $tmpbuf = xs-newz($len);
-            memcpy($tmpbuf+0, $!buffer+0, $!buflen);
-            given $!padding {
-		when NoPadding {
-		    die "'NoPadding' padding requires that input to .encrypt() is supplied as a multiple of blklen";
-		}
-                when StandardPadding {
-                    memset( $tmpbuf + $!buflen, $rlen, $rlen);
-                }
-                when NullPadding {
-                    memset( $tmpbuf + $!buflen, 0, $rlen);
-                }
-                when SpacePadding {
-                    constant Sp = ' '.ord;
-                    memset( $tmpbuf + $!buflen, Sp, $rlen);
-                }
-            }
-            $!buffer = $tmpbuf;
+            pad($!buffer, $!buflen, $len = $!blklen, :$!padding);
         }
         elsif $!padding == NullPadding && $!blklen == 8 {
-	    $len = $!buflen + 8;
-            my $tmpbuf = xs-newz($len);
-            memcpy($tmpbuf+0, $!buffer+0, $!buflen);
-            memset( $tmpbuf + $!buflen, 0, 8);
-            $!buffer = $tmpbuf;
+            pad($!buffer, $!buflen, $len = $!blklen+8, :$!padding);
         }
         my \obuf = xs-newz($len);
         $.err =  gcry_cipher_encrypt($!h, obuf+0, $len, $!buffer+0, $len)
