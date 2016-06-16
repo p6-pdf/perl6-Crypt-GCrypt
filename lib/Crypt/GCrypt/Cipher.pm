@@ -10,6 +10,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 
     my enum Action is export(:Action) < Encrypting Decrypting >;
     my enum Padding is export(:Padding) < NoPadding StandardPadding NullPadding SpacePadding >;
+    has Str $!algorithm;
     has Action $!action;
     has Padding $!padding = StandardPadding;
     has gcry_cipher_hd_t $!h;
@@ -43,7 +44,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
     subset CipherName of Str where { gcry_cipher_map_name($_) }
 
     submethod BUILD(
-	CipherName :$algorithm!,
+	CipherName :$!algorithm!,
 	Str :mode($mode-name) is copy,
 	Padding :$padding,
 	Bool :$secure,
@@ -53,7 +54,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	$flags +|= GCRY_CIPHER_SECURE if $secure;
 	$flags +|= GCRY_CIPHER_ENABLE_SYNC if $enable-sync;
 
-	my int32 $cipher = gcry_cipher_map_name($algorithm);
+	my int32 $cipher = gcry_cipher_map_name($!algorithm);
 	$!blklen = gcry_cipher_get_algo_blklen($cipher);
 	$!keylen = gcry_cipher_get_algo_keylen($cipher);
 	$mode-name //= $!blklen > 1 ?? 'cbc' !! 'stream';
@@ -80,16 +81,16 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
 	$!need-to-call-finish = True;    
     }
 
-    method setkey($k, |c) {
+    method setkey($k, $len? is copy, |c) {
         my $key = xs-array($k, |c);
-        $key[$!keylen-1] = 0 unless $key.elems >= $!keylen;
-        my $len = min($key.elems, $!keylen);
-	$.err = gcry_cipher_setkey($!h, $key+0, $len);
+        $len //= $key.elems;
+        $key[$!keylen-1] = 0 if $key.elems < $!keylen;
+        $.err = gcry_cipher_setkey($!h, $key+0, $len);
     }
 
     method setiv($k=[], |c) {
 	my $iv = xs-array($k, |c);
-        $iv[$!blklen-1] = 0 unless $iv.elems >= $!blklen;
+        $iv[$!blklen-1] = 0 if $iv.elems < $!blklen;
 	$.err = gcry_cipher_setiv($!h, $iv+0, $!blklen);
     }
 
@@ -185,6 +186,7 @@ class Crypt::GCrypt::Cipher is Crypt::GCrypt {
             $!buflen = 0;
             $!buffer[0] = 0;
         }
+
         $obuf;
     }
 
